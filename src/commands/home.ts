@@ -233,6 +233,9 @@ async function providerMenu(): Promise<void> {
   if (providers.length > 1) {
     console.log(`    ${chalk.cyan("2)")} 기본 프로바이더 변경`);
   }
+  if (providers.length > 0) {
+    console.log(`    ${chalk.cyan("3)")} 프로바이더 삭제`);
+  }
   console.log(`    ${chalk.cyan("b)")} 돌아가기`);
   console.log();
 
@@ -252,6 +255,19 @@ async function providerMenu(): Promise<void> {
       const { setDefaultProvider: setDef } = await import("../config/store.js");
       setDef(providers[pi].id);
       console.log(chalk.green(`  ✓ 기본 프로바이더: ${providers[pi].name}\n`));
+    }
+  } else if (choice === "3" && providers.length > 0) {
+    console.log();
+    providers.forEach((p, i) => {
+      console.log(`    ${chalk.cyan(`${i + 1})`)} ${p.name} (${p.model})`);
+    });
+    console.log();
+    const dc = await prompt(chalk.white("  삭제할 번호: "));
+    const di = parseInt(dc) - 1;
+    if (di >= 0 && di < providers.length) {
+      const { removeProvider: rmProv } = await import("../config/store.js");
+      rmProv(providers[di].id);
+      console.log(chalk.green(`  ✓ 삭제됨: ${providers[di].name}\n`));
     }
   }
 }

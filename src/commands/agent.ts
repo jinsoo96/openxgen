@@ -65,7 +65,7 @@ export async function agentRepl(): Promise<void> {
   if (mcpManager && mcpManager.serverCount > 0) {
     console.log(chalk.gray(`  MCP: ${mcpManager.getServerNames().join(", ")} (${mcpManager.getAllTools().length}개 도구)`));
   }
-  console.log(chalk.gray(`  종료: exit | Ctrl+C`));
+  console.log(chalk.gray(`  커맨드: /tools /provider /model /mcp /clear /home /exit`));
   console.log();
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -105,8 +105,30 @@ export async function agentRepl(): Promise<void> {
       continue;
     }
     if (input === "/provider") {
-      console.log(chalk.gray(`현재: ${provider.name} (${provider.model})\n`));
+      console.log(chalk.gray(`현재: ${provider.name} (${provider.model})`));
+      console.log(chalk.gray(`변경: xgen provider add / xgen provider use <id>\n`));
       continue;
+    }
+    if (input === "/model") {
+      const { getProviders: gp } = await import("../config/store.js");
+      const all = gp();
+      if (all.length > 0) {
+        console.log(chalk.bold("\n  등록된 프로바이더:\n"));
+        all.forEach((p, i) => {
+          const mark = p.id === provider.id ? chalk.green("● ") : "  ";
+          console.log(`    ${mark}${i + 1}) ${p.name} (${p.model})`);
+        });
+        console.log(chalk.gray("\n  변경하려면 exit 후 xgen provider use <id>\n"));
+      }
+      continue;
+    }
+    if (input === "/home" || input === "/menu") {
+      console.log(chalk.gray("에이전트를 종료하고 홈으로 돌아갑니다."));
+      mcpManager?.stopAll();
+      rl.close();
+      const { homeMenu } = await import("./home.js");
+      await homeMenu();
+      return;
     }
     if (input === "/mcp") {
       if (mcpManager && mcpManager.serverCount > 0) {
