@@ -76,7 +76,7 @@ export async function agentRepl(): Promise<void> {
   const messages: Message[] = [{ role: "system", content: buildSystemPrompt() }];
 
   // ── 헤더 ──
-  console.log(welcome());
+  console.log(chalk.cyan(`\n  OPEN XGEN`) + chalk.gray(` — AI Coding Agent + XGEN Platform`));
   console.log();
 
   const server = getServer();
@@ -85,10 +85,11 @@ export async function agentRepl(): Promise<void> {
 
   console.log(chalk.gray(`  ${provider.name} · ${provider.model}`));
   if (server && auth) {
-    console.log(chalk.gray(`  ${env?.name ?? "XGEN"} · ${auth.username}@${server.replace("https://", "")}`));
+    console.log(chalk.green(`  ● ${env?.name ?? "XGEN"} · ${auth.username}@${server.replace("https://", "")}`));
+  } else {
+    console.log(chalk.yellow(`  ○ XGEN 미연결 — /connect`));
   }
-  console.log(chalk.gray(`  ${builtinNames.length} 도구 + ${xgenToolDefs.length} XGEN${mcpManager?.serverCount ? ` + ${mcpManager.getAllTools().length} MCP` : ""}`));
-  console.log(chalk.gray(`  /help · /connect · /env · /provider · /exit\n`));
+  console.log(chalk.gray(`  ${builtinNames.length + xgenToolDefs.length} 도구${mcpManager?.serverCount ? ` + ${mcpManager.getAllTools().length} MCP` : ""} · /help\n`));
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const askUser = (): Promise<string> =>
@@ -116,13 +117,14 @@ export async function agentRepl(): Promise<void> {
     if (input === "/help") {
       console.log(`
   ${chalk.bold("슬래시 커맨드")}
-  ${chalk.cyan("/connect")}   XGEN 서버 연결 + 로그인
-  ${chalk.cyan("/env")}       환경 전환 (본사/제주/롯데몰)
-  ${chalk.cyan("/provider")} 프로바이더 변경
-  ${chalk.cyan("/tools")}    사용 가능한 도구 목록
-  ${chalk.cyan("/status")}   현재 연결 상태
-  ${chalk.cyan("/clear")}    대화 초기화
-  ${chalk.cyan("/exit")}     종료
+  ${chalk.cyan("/connect")}    XGEN 서버 연결 + 로그인
+  ${chalk.cyan("/env")}        환경 전환 (본사/제주/롯데몰)
+  ${chalk.cyan("/provider")}  프로바이더 변경
+  ${chalk.cyan("/dashboard")} TUI 대시보드 (4분할 화면)
+  ${chalk.cyan("/tools")}     사용 가능한 도구 목록
+  ${chalk.cyan("/status")}    현재 연결 상태
+  ${chalk.cyan("/clear")}     대화 초기화
+  ${chalk.cyan("/exit")}      종료
 `);
       continue;
     }
@@ -178,6 +180,16 @@ export async function agentRepl(): Promise<void> {
       await setup();
       console.log(chalk.gray("  프로바이더 변경됨. /exit 후 재시작하세요.\n"));
       continue;
+    }
+
+    if (input === "/dashboard" || input === "/dash") {
+      console.log(chalk.gray("  대시보드 열기...\n"));
+      mcpManager?.stopAll();
+      rl.close();
+      if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
+      const { startTui } = await import("../dashboard/tui.js");
+      await startTui();
+      return; // TUI 종료 후 CLI도 종료
     }
 
     // ── AI 대화 ──
