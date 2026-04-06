@@ -27,7 +27,7 @@ export async function workflowList(opts: { detail?: boolean }): Promise<void> {
           String(i + 1),
           (w.workflow_id ?? w.id ?? "-").slice(0, 12),
           truncate(w.workflow_name ?? "-", 30),
-          w.deploy_status === "deployed"
+          (w as Record<string, unknown>).is_deployed
             ? chalk.green("배포됨")
             : chalk.gray("미배포"),
           formatDate(w.updated_at),

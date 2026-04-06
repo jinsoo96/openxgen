@@ -56,26 +56,36 @@ export async function homeMenu(): Promise<void> {
       });
 
       items.push({
-        key: "w", label: "워크플로우 목록",
-        hint: "전체 워크플로우 조회",
+        key: "w", label: "워크플로우 관리",
+        hint: "목록 조회 → 선택 → 실행/정보",
         action: async () => {
-          const { workflowList } = await import("./workflow/list.js");
-          await workflowList({ detail: true });
-        },
-      });
-
-      items.push({
-        key: "r", label: "워크플로우 실행",
-        hint: "ID 입력 → 실행",
-        action: async () => {
-          const { workflowList } = await import("./workflow/list.js");
-          await workflowList({ detail: false });
-          const id = await ask(chalk.white("\n  워크플로우 ID (전체): "));
-          if (!id) return;
-          const input = await ask(chalk.white("  입력 메시지: "));
+          const { listWorkflows } = await import("../api/workflow.js");
+          const wfs = await listWorkflows();
+          if (!wfs.length) {
+            console.log(chalk.yellow("\n  워크플로우가 없습니다.\n"));
+            return;
+          }
+          console.log(chalk.bold(`\n  워크플로우 (${wfs.length}개)\n`));
+          wfs.forEach((w, i) => {
+            const id = (w.workflow_id ?? w.id ?? "").toString();
+            const deployed = (w as Record<string, unknown>).is_deployed;
+            const tag = deployed ? chalk.green(" [배포]") : "";
+            console.log(`    ${chalk.cyan(`${String(i + 1).padStart(3)}.`)} ${w.workflow_name}${tag}`);
+            console.log(`         ${chalk.gray(id)}`);
+          });
+          console.log();
+          console.log(chalk.gray("  번호 입력 → 실행 / Enter → 돌아가기"));
+          const choice = await ask(chalk.cyan("\n  ❯ "));
+          if (!choice) return;
+          const wi = parseInt(choice) - 1;
+          if (wi < 0 || wi >= wfs.length) return;
+          const selected = wfs[wi];
+          const wfId = (selected.workflow_id ?? selected.id ?? "").toString();
+          console.log(chalk.green(`\n  ✓ ${selected.workflow_name}\n`));
+          const input = await ask(chalk.white("  메시지: "));
           if (!input) return;
           const { workflowRun } = await import("./workflow/run.js");
-          await workflowRun(id, input, { logs: false, interactive: false });
+          await workflowRun(wfId, input, { logs: false, interactive: false });
         },
       });
 

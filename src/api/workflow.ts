@@ -57,7 +57,7 @@ export async function getWorkflowDetail(workflowId: string): Promise<WorkflowDet
 export async function getWorkflowListDetail(): Promise<Workflow[]> {
   const client = getClient();
   const res = await client.get("/api/workflow/list/detail");
-  return res.data;
+  return res.data.workflows ?? res.data;
 }
 
 /**
