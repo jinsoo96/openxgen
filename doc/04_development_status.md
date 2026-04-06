@@ -1,130 +1,122 @@
-# XGEN CLI 개발 현황
+# OPEN XGEN 개발 현황 (v1.3.3)
 
 ## Phase 1: 기반 (MVP) — ✅ 완료
 
-### 구현된 기능
-
-#### 설정 관리
-- [x] `xgen config set-server <url>` — 서버 URL 설정
-- [x] `xgen config get-server` — 현재 서버 확인
-- [x] `xgen config list` — 전체 설정 조회
-- [x] `xgen config set <key> <value>` — 설정 변경
-- [x] `~/.xgen/config.json` 자동 생성/관리
-
-#### 인증
-- [x] `xgen login` — 이메일/비밀번호 로그인 (인터랙티브 + 옵션)
-- [x] `xgen logout` — 로그아웃
-- [x] `xgen whoami` — 현재 사용자 정보 + 토큰 유효성 검증
-- [x] 토큰 자동 갱신 (401 응답 시 refresh_token으로 재시도)
-- [x] `~/.xgen/auth.json` 보안 저장 (600 권한)
-
-#### API 클라이언트
-- [x] axios 인스턴스 + 인터셉터
-- [x] 자동 Authorization 헤더
-- [x] 401 → 자동 토큰 갱신
-- [x] 서버 변경 시 클라이언트 리셋
-
-### 구현된 파일
-```
-src/
-├── index.ts                     # 메인 CLI (Commander)
-├── commands/
-│   ├── config.ts                # config 서브커맨드
-│   ├── login.ts                 # login, logout, whoami
-│   ├── chat.ts                  # 대화형 모드
-│   └── workflow/
-│       ├── index.ts             # workflow 서브커맨드 그룹
-│       ├── list.ts              # workflow list
-│       ├── info.ts              # workflow info
-│       ├── run.ts               # workflow run (SSE 스트리밍)
-│       └── history.ts           # workflow history
-├── api/
-│   ├── client.ts                # axios 클라이언트
-│   ├── auth.ts                  # 인증 API
-│   ├── workflow.ts              # 워크플로우 API
-│   └── types.ts                 # 공통 타입
-├── config/
-│   └── store.ts                 # 설정/인증 저장소
-└── utils/
-    ├── sse.ts                   # SSE 파서
-    └── format.ts                # 출력 포맷팅
-```
-
----
+- [x] 설정 관리 (`xgen config set-server/get-server/list/set`)
+- [x] 인증 (`xgen login/logout/whoami`) — SHA256 해싱
+- [x] API 클라이언트 (axios + 토큰 자동 갱신)
 
 ## Phase 2: 워크플로우 — ✅ 완료
 
-- [x] `xgen workflow list` (별칭: `xgen wf ls`)
-- [x] `xgen workflow list --detail`
-- [x] `xgen workflow info <id>`
-- [x] `xgen workflow run <id> "입력"` — SSE 스트리밍 실행
-- [x] `xgen workflow run -i <id>` — 인터랙티브 입력
-- [x] `xgen workflow run -l <id>` — 디버그 로그 표시
-- [x] `xgen workflow history [id]` — 실행 이력
+- [x] `xgen wf ls` / `xgen wf ls --detail`
+- [x] `xgen wf info <id>` / `xgen wf run <id> "입력"`
+- [x] SSE 스트리밍 실행 / 디버그 로그 / 실행 이력
 
----
+## Phase 3: 인터랙티브 채팅 — ✅ 완료
 
-## Phase 3: 인터랙티브 모드 — ✅ 기본 구현
+- [x] `xgen chat` — 워크플로우 채팅
+- [x] SSE 스트리밍 응답
 
-- [x] `xgen chat` — 워크플로우 선택 → 반복 실행
-- [x] `xgen chat <workflow-id>` — 특정 워크플로우로 바로 시작
-- [x] 실시간 SSE 스트리밍 응답
-- [ ] 멀티턴 컨텍스트 유지 (서버 사이드 지원 필요)
-- [ ] 마크다운 렌더링 (marked-terminal)
-- [ ] 코드 하이라이팅
+## Phase 4: 문서 & 온톨로지 — ✅ 부분 완료
 
----
+- [x] 컬렉션 목록 (`/api/retrieval/collections`) — 22개 조회 확인
+- [x] 문서 업로드/조회
+- [ ] 온톨로지 — 게이트웨이에 ontology 모듈 매핑 없어 접근 불가 (인프라 수정 필요)
 
-## Phase 4: 문서 & 온톨로지 — ✅ 구현 완료
+## Phase 5: AI 코딩 에이전트 — ✅ 완료
 
-- [x] `xgen doc list` (별칭: `xgen doc ls`)
-- [x] `xgen doc upload <file>`
-- [x] `xgen doc info <id>`
-- [x] `xgen ontology query "질문"` (별칭: `xgen ont q`)
-- [x] `xgen ont chat` — 멀티턴 GraphRAG
-- [x] `xgen ont stats <graph-id>`
+- [x] Claude Code 스타일 채팅 기본 진입 (`xgen` → 바로 채팅)
+- [x] 프로바이더 9종 (OpenAI/Gemini/Anthropic/Ollama/Groq/Together/OpenRouter/DeepSeek/Custom)
+- [x] 모델 50개+ 선택지 + 환경변수 자동감지
+- [x] 내장 도구 7개: file_read/write/edit, bash, grep, list_files, sandbox_run
+- [x] XGEN 도구 6개: workflow_list/run/info, collection_list, execution_history, server_status
+- [x] MCP 클라이언트 (.mcp.json 자동 연동)
+- [x] 스트리밍 + 멀티스텝 tool calling (최대 20회)
+- [x] 슬래시 커맨드: /connect, /env, /provider, /dashboard, /tools, /status, /clear, /help, /exit
 
----
+## Phase 6: 환경 & 서버 — ✅ 완료
 
-## Phase 5: AI 코딩 에이전트 — ✅ 구현 완료
+- [x] 환경 프로필 (본사/제주/롯데몰 프리셋)
+- [x] /connect로 서버 연결 + 로그인 한번에
+- [x] /env로 환경 전환
 
-- [x] `xgen provider add/ls/use/remove` — 멀티 프로바이더 관리
-- [x] `xgen agent` — AI 코딩 에이전트 REPL
-- [x] 도구: file_read, file_write, file_edit, bash, grep, list_files
-- [x] 스트리밍 응답 + 멀티 스텝 tool calling 루프
-- [x] OpenAI/Gemini/Ollama/Anthropic/Custom 프로바이더 지원
-- [x] 슬래시 커맨드: /clear, /tools, /provider, /exit
+## Phase 7: TUI 대시보드 — ✅ 완료
 
----
+- [x] blessed 기반 4분할: 워크플로우 | 상세/실행 | 컬렉션 | AI 채팅
+- [x] Tab 패널 전환, 화살표 선택, Enter 실행
+- [x] 30초 자동 새로고침
+- [x] /dashboard 커맨드로 진입
 
-## Phase 6: VS Code Extension — 🔲 미구현
+## Phase 8: npm 배포 — ✅ 완료
 
-- [ ] 프로젝트 초기화
+- [x] `npm install -g openxgen` → `xgen` 전역 명령어
+- [x] https://www.npmjs.com/package/openxgen
+- [x] https://github.com/jinsoo96/openxgen
+
+## Phase 9: VS Code Extension — 🔲 미구현
+
 - [ ] XGEN 사이드바
 - [ ] 워크플로우 실행 UI
 - [ ] 채팅 인터페이스
 
 ---
 
-## 빌드 & 실행
+## 현재 소스 구조
 
-```bash
-# 의존성 설치
-npm install
-
-# 빌드
-npm run build
-
-# 전역 링크 (개발용)
-npm link
-
-# 또는 직접 실행
-node dist/index.js [command]
 ```
+src/
+├── index.ts                        메인 엔트리
+├── commands/
+│   ├── agent.ts                    AI 에이전트 REPL (메인 인터페이스)
+│   ├── provider.ts                 프로바이더 9종 가이드 설정
+│   ├── home.ts                     홈 메뉴
+│   ├── chat.ts                     워크플로우 채팅
+│   ├── config.ts                   설정 관리
+│   ├── login.ts                    인증
+│   ├── doc.ts                      문서 관리
+│   ├── ontology.ts                 온톨로지
+│   └── workflow/                   워크플로우 CRUD + 실행
+├── agent/
+│   ├── llm.ts                      OpenAI SDK 멀티 프로바이더
+│   └── tools/
+│       ├── index.ts                도구 레지스트리
+│       ├── xgen-api.ts             XGEN 플랫폼 도구 (6개)
+│       ├── file-read/write/edit.ts 파일 도구
+│       ├── bash.ts                 셸 실행
+│       ├── grep.ts                 검색
+│       ├── list-files.ts           디렉토리
+│       └── sandbox.ts              격리 코드 실행
+├── api/
+│   ├── client.ts                   axios + 토큰 갱신
+│   ├── auth.ts                     인증 (SHA256)
+│   ├── workflow.ts                 워크플로우 API
+│   ├── document.ts                 문서/컬렉션 API
+│   └── ontology.ts                 온톨로지 API
+├── mcp/
+│   └── client.ts                   MCP stdio 클라이언트
+├── config/
+│   └── store.ts                    설정/인증/프로바이더/환경 저장소
+├── dashboard/
+│   ├── tui.ts                      blessed 4분할 대시보드
+│   └── renderer.ts                 TUI 렌더링
+└── utils/
+    ├── ui.ts                       UI 컴포넌트
+    ├── format.ts                   출력 포맷
+    ├── sse.ts                      SSE 파서
+    └── markdown.ts                 마크다운 렌더링
+```
+
+---
 
 ## 확인된 이슈
 
-1. **비밀번호 해싱**: 게이트웨이(Rust)에서 SHA256 해싱 후 DB 비교. 
-   CLI에서 평문 전송 → 게이트웨이가 해싱 → DB 비교하는 구조이므로 문제없음.
-2. **SSE 파싱**: 실제 서버 응답 형식에 맞게 파서 튜닝 필요할 수 있음.
-3. **로컬 개발**: Docker Compose dev 환경에서 테스트 필요.
+1. **워크플로우 실행 404**: Istio가 `/api/workflow/execute/based_id/stream`을 Next.js로 라우팅 → CLI 직접 접근 불가. deploy/result 엔드포인트로 우회 중.
+2. **온톨로지 접근 불가**: 게이트웨이 services.yaml에 `ontology` 모듈 매핑 없음.
+3. **비배포 워크플로우 실행 불가**: deploy_key 없으면 실행 안 됨.
+
+## 다음 할 것
+
+- XGEN API 전체 엔드포인트 연동 (admin, tools, prompts, nodes 등)
+- 게이트웨이에 ontology 모듈 추가
+- xgen-infra 소스 변경 감지 → 자동 빌드
+- VS Code Extension
