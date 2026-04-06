@@ -18,6 +18,7 @@ import { registerAgentCommand, agentRepl } from "./commands/agent.js";
 import { registerDocCommand } from "./commands/doc.js";
 import { registerOntologyCommand } from "./commands/ontology.js";
 import { getAuth, getServer, getDefaultProvider } from "./config/store.js";
+import { homeMenu } from "./commands/home.js";
 
 const VERSION = "0.3.0";
 
@@ -77,34 +78,12 @@ registerAgentCommand(program);
 registerDocCommand(program);
 registerOntologyCommand(program);
 
-// 인자 없이 실행: 상황에 따라 라우팅
+// 인자 없이 실행: 홈 메뉴
 if (process.argv.length <= 2) {
-  const auth = getAuth();
-  const server = getServer();
-  const provider = getDefaultProvider();
-
-  if (provider) {
-    // 프로바이더 있으면 → 에이전트 모드
-    agentRepl().catch((err) => {
-      console.error(chalk.red(`오류: ${err.message}`));
-      process.exit(1);
-    });
-  } else if (auth && server) {
-    // XGEN 서버 로그인 되어있으면 → 채팅 모드
-    chat().catch((err) => {
-      console.error(chalk.red(`오류: ${err.message}`));
-      process.exit(1);
-    });
-  } else {
-    // 아무것도 없으면 → 안내
-    console.log(BANNER);
-    console.log(chalk.yellow("  설정이 필요합니다.\n"));
-    console.log(chalk.bold("  AI 에이전트:"));
-    console.log(`    ${chalk.cyan("xgen provider add")}    프로바이더 추가\n`);
-    console.log(chalk.bold("  XGEN 플랫폼:"));
-    console.log(`    ${chalk.cyan("xgen config set-server")} <url>  서버 설정`);
-    console.log(`    ${chalk.cyan("xgen login")}                   로그인\n`);
-  }
+  homeMenu().catch((err) => {
+    console.error(chalk.red(`오류: ${err.message}`));
+    process.exit(1);
+  });
 } else {
   program.parse();
 }

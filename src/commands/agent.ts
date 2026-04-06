@@ -9,6 +9,7 @@ import { createLLMClient, streamChat, type Message } from "../agent/llm.js";
 import { getAllToolDefs, executeTool, getToolNames } from "../agent/tools/index.js";
 import { McpManager, loadMcpConfig } from "../mcp/client.js";
 import { printError } from "../utils/format.js";
+import { guidedProviderSetup } from "./provider.js";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 
 const SYSTEM_PROMPT = `You are OPEN XGEN Agent, an AI coding assistant running in the user's terminal.
@@ -22,11 +23,13 @@ For sandbox_run, you can install npm/pip packages and run isolated code.`;
 let mcpManager: McpManager | null = null;
 
 export async function agentRepl(): Promise<void> {
-  const provider = getDefaultProvider();
+  let provider = getDefaultProvider();
   if (!provider) {
-    printError("프로바이더가 설정되지 않았습니다.");
-    console.log(`  ${chalk.cyan("xgen provider add")}  프로바이더 추가`);
-    process.exit(1);
+    // 프로바이더 없으면 자동 가이드 설정
+    provider = await guidedProviderSetup();
+    if (!provider) {
+      process.exit(1);
+    }
   }
 
   const client = createLLMClient(provider);

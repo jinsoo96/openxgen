@@ -1,14 +1,16 @@
-# XGEN CLI
+# OPEN XGEN
 
-XGEN 2.0 플랫폼 CLI + AI 코딩 에이전트.
+AI Coding Agent + XGEN Platform CLI.
 
-워크플로우 실행, 문서 관리, 온톨로지 질의를 터미널에서. OpenAI/Gemini/Ollama 등 멀티 프로바이더 AI 에이전트 내장.
+터미널에서 AI 코딩 에이전트, 워크플로우 실행, 문서 관리, 온톨로지 질의. OpenAI/Gemini/Ollama 등 멀티 프로바이더 지원.
 
 ## 설치
 
 ```bash
-npm install -g @xgen/cli
+npm install -g openxgen
 ```
+
+> 권한 오류(`EACCES`) 시: `sudo npm install -g openxgen` 또는 [nvm](https://github.com/nvm-sh/nvm) 사용 권장
 
 ## 빠른 시작
 
