@@ -87,20 +87,25 @@ export async function agentRepl(): Promise<void> {
   const messages: Message[] = [{ role: "system", content: buildSystemPrompt() }];
 
   // ── 헤더 ──
-  console.log(chalk.cyan(`\n  OPEN XGEN`) + chalk.gray(` — AI Coding Agent + XGEN Platform`));
-  console.log();
-
   const server = getServer();
   const auth = getAuth();
   const env = getActiveEnvironment();
 
-  console.log(chalk.gray(`  ${provider.name} · ${provider.model}`));
+  const W = Math.min(process.stdout.columns || 60, 60);
+  const line = chalk.cyan("─".repeat(W));
+
+  console.log(`\n${line}`);
+  console.log(chalk.cyan.bold("  ✦ OPEN XGEN"));
+  console.log(line);
+  console.log();
+  console.log(chalk.gray(`  model  ${provider.model}`));
   if (server && auth) {
-    console.log(chalk.green(`  ● ${env?.name ?? "XGEN"} · ${auth.username}@${server.replace("https://", "")}`));
-  } else {
-    console.log(chalk.yellow(`  ○ XGEN 미연결 — /connect`));
+    console.log(chalk.gray(`  xgen   ${chalk.green("●")} ${auth.username}@${(env?.name ?? server).replace("https://", "")}`));
   }
-  console.log(chalk.gray(`  ${builtinNames.length + xgenToolDefs.length} 도구${mcpManager?.serverCount ? ` + ${mcpManager.getAllTools().length} MCP` : ""} · /help\n`));
+  console.log(chalk.gray(`  cwd    ${process.cwd()}`));
+  console.log();
+  console.log(chalk.gray(`  무엇이든 물어보세요. /help`));
+  console.log();
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const askUser = (): Promise<string> =>
