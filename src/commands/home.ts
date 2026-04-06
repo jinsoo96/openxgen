@@ -2,7 +2,7 @@
  * OPEN XGEN 홈 — 메인 인터랙티브 허브
  */
 import chalk from "chalk";
-import { getAuth, getServer, getDefaultProvider, getProviders } from "../config/store.js";
+import { getAuth, getServer, getDefaultProvider, getProviders, getEnvironments, getActiveEnvironment, switchEnvironment, addEnvironment, removeEnvironment, type XgenEnvironment } from "../config/store.js";
 import { welcome, box, divider, statusDot, ask } from "../utils/ui.js";
 import { agentRepl } from "./agent.js";
 import { chat } from "./chat.js";
@@ -12,6 +12,8 @@ function showStatus(): void {
   const provider = getDefaultProvider();
   const server = getServer();
   const auth = getAuth();
+  const activeEnv = getActiveEnvironment();
+  const envs = getEnvironments();
 
   console.log(divider("상태"));
   console.log();
@@ -23,6 +25,11 @@ function showStatus(): void {
     : server
       ? statusDot(false, "XGEN 서버", `${server.replace("https://", "")} · 로그인 필요`)
       : statusDot(false, "XGEN 서버", "미연결"));
+  if (activeEnv) {
+    console.log(statusDot(true, chalk.bold("환경"), `${activeEnv.name} (${envs.length}개 등록)`));
+  } else if (envs.length > 0) {
+    console.log(statusDot(false, "환경", `${envs.length}개 등록`));
+  }
   console.log();
 }
 
@@ -174,6 +181,12 @@ export async function homeMenu(): Promise<void> {
       action: async () => { await providerMenu(); showStatus(); },
     });
 
+    items.push({
+      key: "e", label: "환경 관리",
+      hint: `${getEnvironments().length}개 등록 — 서버 전환`,
+      action: async () => { await environmentMenu(); showStatus(); },
+    });
+
     // ── 메뉴 출력 ──
     console.log(divider("메뉴"));
     console.log();
@@ -194,7 +207,7 @@ export async function homeMenu(): Promise<void> {
 
     console.log();
     console.log(chalk.gray("  설정"));
-    for (const item of items.filter((i) => ["s", "p"].includes(i.key))) {
+    for (const item of items.filter((i) => ["s", "p", "e"].includes(i.key))) {
       console.log(`    ${chalk.cyan.bold(item.key + ".")} ${item.label} ${chalk.gray("— " + item.hint)}`);
     }
 
@@ -315,6 +328,112 @@ async function providerMenu(): Promise<void> {
       const { removeProvider } = await import("../config/store.js");
       removeProvider(providers[di].id);
       console.log(chalk.green(`  ✓ 삭제: ${providers[di].name}\n`));
+    }
+  }
+}
+
+async function environmentMenu(): Promise<void> {
+  const envs = getEnvironments();
+  const active = getActiveEnvironment();
+
+  console.log();
+  console.log(box(["환경 관리 — XGEN 서버 프로필"]));
+  console.log();
+
+  if (envs.length > 0) {
+    for (const e of envs) {
+      const mark = e.id === active?.id ? chalk.green("● ") : chalk.gray("  ");
+      console.log(`    ${mark}${chalk.bold(e.name)} ${chalk.gray(e.url)}`);
+      if (e.description) console.log(`      ${chalk.gray(e.description)}`);
+    }
+    console.log();
+  } else {
+    console.log(chalk.gray("    등록된 환경 없음\n"));
+  }
+
+  const opts = ["새 환경 추가", "기본 프리셋 등록 (본사/제주/롯데몰)"];
+  if (envs.length > 0) opts.push("환경 전환 + 로그인");
+  if (envs.length > 0) opts.push("삭제");
+  opts.push("돌아가기");
+
+  opts.forEach((o, i) => console.log(`    ${chalk.cyan(`${i + 1}.`)} ${o}`));
+  console.log();
+
+  const c = await ask(chalk.cyan("  ❯ "));
+  const ci = parseInt(c);
+
+  if (ci === 1) {
+    const name = await ask(chalk.white("  이름: "));
+    const url = await ask(chalk.white("  URL: "));
+    const email = await ask(chalk.white("  이메일 (선택): "));
+    const desc = await ask(chalk.white("  설명 (선택): "));
+    if (name && url) {
+      const id = name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+      addEnvironment({ id, name, url: url.replace(/\/+$/, ""), email: email || undefined, description: desc || undefined });
+      console.log(chalk.green(`\n  ✓ ${name} 추가됨\n`));
+    }
+  } else if (ci === 2) {
+    const presets: XgenEnvironment[] = [
+      { id: "hq", name: "본사 (244)", url: "https://xgen.x2bee.com", email: "admin@plateer.com", description: "본사 배포 환경" },
+      { id: "jeju", name: "제주 (243)", url: "https://jeju-xgen.x2bee.com", email: "admin@plateer.com", description: "제주 서버" },
+      { id: "lotte", name: "롯데몰 (DGX)", url: "https://lotteimall-xgen.x2bee.com", description: "롯데몰 DGX Spark" },
+    ];
+
+    console.log(chalk.bold("\n  기본 환경 프리셋:\n"));
+    presets.forEach((p, i) => {
+      console.log(`    ${chalk.cyan(`${i + 1}.`)} ${p.name} ${chalk.gray(p.url)}`);
+    });
+    console.log(`    ${chalk.cyan(`${presets.length + 1}.`)} 전부 등록`);
+    console.log();
+
+    const pc = await ask(chalk.cyan("  ❯ "));
+    const pi = parseInt(pc);
+    if (pi === presets.length + 1) {
+      for (const p of presets) addEnvironment(p);
+      console.log(chalk.green(`  ✓ ${presets.length}개 환경 등록됨\n`));
+    } else if (pi >= 1 && pi <= presets.length) {
+      addEnvironment(presets[pi - 1]);
+      console.log(chalk.green(`  ✓ ${presets[pi - 1].name} 등록됨\n`));
+    }
+  } else if (opts[ci - 1] === "환경 전환 + 로그인") {
+    console.log();
+    envs.forEach((e, i) => {
+      const mark = e.id === active?.id ? chalk.green("● ") : "  ";
+      console.log(`    ${mark}${chalk.cyan(`${i + 1}.`)} ${e.name} ${chalk.gray(e.url)}`);
+    });
+    console.log();
+    const ei = parseInt(await ask(chalk.cyan("  ❯ "))) - 1;
+    if (ei >= 0 && ei < envs.length) {
+      switchEnvironment(envs[ei].id);
+      console.log(chalk.green(`\n  ✓ ${envs[ei].name} 전환됨 → ${envs[ei].url}`));
+      if (envs[ei].email) {
+        const pw = await ask(chalk.white(`  비밀번호 (${envs[ei].email}): `));
+        if (pw) {
+          try {
+            const { apiLogin } = await import("../api/auth.js");
+            const { setAuth } = await import("../config/store.js");
+            const result = await apiLogin(envs[ei].email!, pw);
+            if (result.success && result.access_token) {
+              setAuth({ accessToken: result.access_token, refreshToken: result.refresh_token ?? "", userId: result.user_id ?? "", username: result.username ?? "", isAdmin: false, expiresAt: null });
+              console.log(chalk.green(`  ✓ 로그인: ${result.username}\n`));
+            } else {
+              console.log(chalk.red(`  ✗ ${result.message}\n`));
+            }
+          } catch (err) {
+            console.log(chalk.red(`  ✗ ${(err as Error).message}\n`));
+          }
+        }
+      }
+      console.log();
+    }
+  } else if (opts[ci - 1] === "삭제") {
+    console.log();
+    envs.forEach((e, i) => console.log(`    ${chalk.cyan(`${i + 1}.`)} ${e.name}`));
+    console.log();
+    const di = parseInt(await ask(chalk.white("  삭제 번호: "))) - 1;
+    if (di >= 0 && di < envs.length) {
+      removeEnvironment(envs[di].id);
+      console.log(chalk.green(`  ✓ 삭제: ${envs[di].name}\n`));
     }
   }
 }

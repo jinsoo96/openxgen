@@ -163,6 +163,67 @@ export function setDefaultProvider(id: string): boolean {
   return true;
 }
 
+// ── Environments ──
+
+export interface XgenEnvironment {
+  id: string;
+  name: string;
+  url: string;
+  email?: string;
+  description?: string;
+}
+
+const ENVIRONMENTS_FILE = join(XGEN_DIR, "environments.json");
+
+interface EnvStore {
+  environments: XgenEnvironment[];
+  activeId: string | null;
+}
+
+const DEFAULT_ENV_STORE: EnvStore = { environments: [], activeId: null };
+
+export function getEnvStore(): EnvStore {
+  return { ...DEFAULT_ENV_STORE, ...readJson(ENVIRONMENTS_FILE, DEFAULT_ENV_STORE) };
+}
+
+export function getEnvironments(): XgenEnvironment[] {
+  return getEnvStore().environments;
+}
+
+export function addEnvironment(env: XgenEnvironment): void {
+  const store = getEnvStore();
+  store.environments = store.environments.filter((e) => e.id !== env.id);
+  store.environments.push(env);
+  if (!store.activeId) store.activeId = env.id;
+  writeJson(ENVIRONMENTS_FILE, store);
+}
+
+export function removeEnvironment(id: string): boolean {
+  const store = getEnvStore();
+  const before = store.environments.length;
+  store.environments = store.environments.filter((e) => e.id !== id);
+  if (store.activeId === id) store.activeId = store.environments[0]?.id ?? null;
+  writeJson(ENVIRONMENTS_FILE, store);
+  return store.environments.length < before;
+}
+
+export function switchEnvironment(id: string): boolean {
+  const store = getEnvStore();
+  const env = store.environments.find((e) => e.id === id);
+  if (!env) return false;
+  store.activeId = id;
+  writeJson(ENVIRONMENTS_FILE, store);
+  // 서버 URL도 같이 변경
+  setServer(env.url);
+  return true;
+}
+
+export function getActiveEnvironment(): XgenEnvironment | null {
+  const store = getEnvStore();
+  if (!store.activeId) return null;
+  return store.environments.find((e) => e.id === store.activeId) ?? null;
+}
+
 // ── Helpers ──
 
 export function requireServer(): string {
