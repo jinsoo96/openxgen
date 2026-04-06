@@ -133,7 +133,7 @@ export function addProvider(provider: ProviderConfig): void {
   const store = getProvidersStore();
   store.providers = store.providers.filter((p) => p.id !== provider.id);
   store.providers.push(provider);
-  if (!store.defaultId) store.defaultId = provider.id;
+  store.defaultId = provider.id;  // 항상 새로 추가한 걸 기본으로
   writeJson(PROVIDERS_FILE, store, true);
 }
 
