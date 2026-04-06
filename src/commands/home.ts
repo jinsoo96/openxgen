@@ -1,174 +1,153 @@
 /**
- * OPEN XGEN 메인 홈 — xgen 치면 나오는 인터랙티브 메뉴
+ * OPEN XGEN 홈 — 메인 인터랙티브 허브
  */
 import chalk from "chalk";
-import { createInterface } from "node:readline";
-import { getAuth, getServer, getDefaultProvider } from "../config/store.js";
+import { getAuth, getServer, getDefaultProvider, getProviders } from "../config/store.js";
+import { welcome, box, divider, statusDot, menu, ask } from "../utils/ui.js";
 import { agentRepl } from "./agent.js";
 import { chat } from "./chat.js";
 import { guidedProviderSetup } from "./provider.js";
-
-function prompt(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
 
 function showStatus(): void {
   const provider = getDefaultProvider();
   const server = getServer();
   const auth = getAuth();
 
-  console.log(chalk.gray("  ─────────────────────────────────"));
-  console.log(chalk.gray("  상태:"));
+  console.log(divider("상태"));
+  console.log();
 
   if (provider) {
-    console.log(`    AI 에이전트  ${chalk.green("●")} ${provider.name} (${provider.model})`);
+    console.log(statusDot(true, chalk.bold("AI 에이전트"), `${provider.name} · ${provider.model}`));
   } else {
-    console.log(`    AI 에이전트  ${chalk.red("○")} 미설정`);
+    console.log(statusDot(false, "AI 에이전트", "미설정"));
   }
 
   if (server && auth) {
-    console.log(`    XGEN 서버   ${chalk.green("●")} ${server} (${auth.username})`);
+    console.log(statusDot(true, chalk.bold("XGEN 서버"), `${auth.username} · ${server.replace("https://", "")}`));
   } else if (server) {
-    console.log(`    XGEN 서버   ${chalk.yellow("○")} ${server} (로그인 필요)`);
+    console.log(statusDot(false, "XGEN 서버", `${server.replace("https://", "")} · 로그인 필요`));
   } else {
-    console.log(`    XGEN 서버   ${chalk.red("○")} 미설정`);
+    console.log(statusDot(false, "XGEN 서버", "미연결"));
   }
-  console.log(chalk.gray("  ─────────────────────────────────\n"));
+  console.log();
 }
 
 export async function homeMenu(): Promise<void> {
-  const provider = getDefaultProvider();
-  const server = getServer();
-  const auth = getAuth();
-
-  console.log(chalk.cyan(`
-   ██████  ██████  ███████ ███    ██
-  ██    ██ ██   ██ ██      ████   ██
-  ██    ██ ██████  █████   ██ ██  ██
-  ██    ██ ██      ██      ██  ██ ██
-   ██████  ██      ███████ ██   ████`));
-  console.log(chalk.white.bold(`
-  ██   ██  ██████  ███████ ███    ██
-   ██ ██  ██       ██      ████   ██
-    ███   ██   ███ █████   ██ ██  ██
-   ██ ██  ██    ██ ██      ██  ██ ██
-  ██   ██  ██████  ███████ ██   ████`));
-  console.log(chalk.gray(`                              v0.3.0\n`));
+  console.log(welcome());
+  console.log(chalk.gray("                              v0.3.2\n"));
 
   showStatus();
 
   while (true) {
-    // 메뉴 항목 동적 구성
-    const items: { key: string; label: string; available: boolean; action: () => Promise<void> }[] = [];
+    const provider = getDefaultProvider();
+    const server = getServer();
+    const auth = getAuth();
+    const hasServer = !!(server && auth);
 
+    // 동적 메뉴 구성
+    const items: { label: string; hint: string; action: () => Promise<boolean> }[] = [];
+
+    // AI 에이전트
     items.push({
-      key: "1",
       label: provider
-        ? `AI 에이전트 시작 ${chalk.gray(`(${provider.name})`)}`
-        : `AI 에이전트 설정 + 시작`,
-      available: true,
-      action: async () => { await agentRepl(); },
-    });
-
-    if (server && auth) {
-      items.push({
-        key: "2",
-        label: `워크플로우 채팅 ${chalk.gray(`(${auth.username}@${server.replace("https://","")})`)}`,
-        available: true,
-        action: async () => { await chat(); },
-      });
-      items.push({
-        key: "3",
-        label: "워크플로우 목록",
-        available: true,
-        action: async () => {
-          const { workflowList } = await import("./workflow/list.js");
-          await workflowList({ detail: false });
-          return;
-        },
-      });
-    } else {
-      items.push({
-        key: "2",
-        label: "XGEN 서버 연결 + 로그인",
-        available: true,
-        action: async () => { await serverSetup(); },
-      });
-    }
-
-    items.push({
-      key: String(items.length + 1),
-      label: "프로바이더 관리",
-      available: true,
-      action: async () => { await providerMenu(); },
-    });
-
-    items.push({
-      key: String(items.length + 1),
-      label: "설정 보기",
-      available: true,
+        ? `${chalk.bold("AI 에이전트")} ${chalk.gray(`(${provider.model})`)}`
+        : chalk.bold("AI 에이전트 시작하기"),
+      hint: provider ? "대화 시작" : "프로바이더 설정 → 바로 시작",
       action: async () => {
+        await agentRepl();
+        console.log();
         showStatus();
-        const cfg = await import("../config/store.js");
-        const config = cfg.getConfig();
-        console.log(chalk.gray("  설정 파일: ~/.xgen/\n"));
-        console.log(chalk.gray(`    서버: ${config.server ?? "(없음)"}`));
-        console.log(chalk.gray(`    테마: ${config.theme}`));
-        console.log(chalk.gray(`    스트림 로그: ${config.streamLogs}\n`));
+        return false;
       },
     });
 
+    // 워크플로우
+    if (hasServer) {
+      items.push({
+        label: chalk.bold("워크플로우 채팅"),
+        hint: `${auth!.username}@${server!.replace("https://", "")}`,
+        action: async () => {
+          await chat();
+          console.log();
+          showStatus();
+          return false;
+        },
+      });
+
+      items.push({
+        label: "워크플로우 목록",
+        hint: "조회",
+        action: async () => {
+          const { workflowList } = await import("./workflow/list.js");
+          await workflowList({ detail: false });
+          return false;
+        },
+      });
+    }
+
+    // 서버 연결
     items.push({
-      key: "q",
-      label: "종료",
-      available: true,
-      action: async () => { process.exit(0); },
+      label: hasServer ? "XGEN 서버 재설정" : chalk.bold("XGEN 서버 연결"),
+      hint: hasServer ? "서버 변경 / 재로그인" : "서버 URL + 로그인",
+      action: async () => {
+        await serverSetup();
+        showStatus();
+        return false;
+      },
+    });
+
+    // 프로바이더 관리
+    items.push({
+      label: "프로바이더 관리",
+      hint: `${getProviders().length}개 등록됨`,
+      action: async () => {
+        await providerMenu();
+        showStatus();
+        return false;
+      },
     });
 
     // 메뉴 출력
-    console.log(chalk.bold("  뭘 하시겠습니까?\n"));
-    for (const item of items) {
-      console.log(`    ${chalk.cyan(item.key + ")")} ${item.label}`);
+    console.log(divider("메뉴"));
+    for (let i = 0; i < items.length; i++) {
+      const num = chalk.cyan.bold(` ${String(i + 1).padStart(2)}.`);
+      console.log(`  ${num} ${items[i].label}`);
+      console.log(`      ${chalk.gray(items[i].hint)}`);
     }
+    console.log(`  ${chalk.gray("   q. 종료")}`);
     console.log();
 
-    const choice = await prompt(chalk.white("  선택: "));
+    const choice = await ask(chalk.cyan("  ❯ "));
 
-    if (choice === "q" || choice === "exit") {
-      console.log(chalk.gray("\n  안녕히.\n"));
+    if (choice === "q" || choice === "exit" || choice === "") {
+      if (choice === "") continue;
+      console.log(chalk.gray("\n  👋 다음에 또.\n"));
       break;
     }
 
-    const selected = items.find((i) => i.key === choice);
-    if (!selected) {
-      console.log(chalk.red("  잘못된 선택입니다.\n"));
+    const idx = parseInt(choice) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= items.length) {
+      console.log(chalk.red(`  잘못된 입력입니다.\n`));
       continue;
     }
 
     try {
-      await selected.action();
+      const shouldExit = await items[idx].action();
+      if (shouldExit) break;
     } catch (err) {
       console.log(chalk.red(`\n  오류: ${(err as Error).message}\n`));
     }
-
-    // 에이전트나 채팅에서 돌아오면 다시 메뉴
-    console.log();
-    showStatus();
   }
 }
 
 async function serverSetup(): Promise<void> {
-  console.log(chalk.cyan.bold("\n  XGEN 서버 연결\n"));
+  console.log();
+  console.log(box(["XGEN 서버 연결"], "cyan"));
+  console.log();
 
   const currentServer = getServer();
-  const urlInput = await prompt(
-    chalk.white(`  서버 URL${currentServer ? ` [${currentServer}]` : ""}: `)
+  const urlInput = await ask(
+    chalk.white(`  서버 URL${currentServer ? chalk.gray(` [${currentServer}]`) : ""}: `)
   );
   const url = urlInput || currentServer;
 
@@ -179,12 +158,13 @@ async function serverSetup(): Promise<void> {
 
   const { setServer } = await import("../config/store.js");
   setServer(url);
-  console.log(chalk.green(`  ✓ 서버 설정: ${url}\n`));
+  console.log(chalk.green(`  ✓ 서버: ${url}\n`));
 
   // 로그인
-  console.log(chalk.bold("  로그인\n"));
-  const email = await prompt(chalk.white("  이메일: "));
-  const password = await prompt(chalk.white("  비밀번호: "));
+  console.log(chalk.bold("  로그인"));
+  console.log();
+  const email = await ask(chalk.white("  이메일: "));
+  const password = await ask(chalk.white("  비밀번호: "));
 
   if (!email || !password) {
     console.log(chalk.red("  이메일과 비밀번호가 필요합니다.\n"));
@@ -205,69 +185,73 @@ async function serverSetup(): Promise<void> {
         isAdmin: false,
         expiresAt: null,
       });
-      console.log(chalk.green(`  ✓ 로그인 성공! ${result.username ?? email}\n`));
+      console.log(chalk.green(`\n  ✓ 로그인 성공! ${chalk.bold(result.username ?? email)}\n`));
     } else {
-      console.log(chalk.red(`  ✗ 로그인 실패: ${result.message}\n`));
+      console.log(chalk.red(`\n  ✗ ${result.message}\n`));
     }
   } catch (err) {
-    console.log(chalk.red(`  ✗ 로그인 실패: ${(err as Error).message}\n`));
+    console.log(chalk.red(`\n  ✗ ${(err as Error).message}\n`));
   }
 }
 
 async function providerMenu(): Promise<void> {
-  const { getProviders, getDefaultProvider: getDefault } = await import("../config/store.js");
   const providers = getProviders();
-  const defaultP = getDefault();
+  const defaultP = getDefaultProvider();
 
-  console.log(chalk.cyan.bold("\n  프로바이더 관리\n"));
+  console.log();
+  console.log(box(["프로바이더 관리"], "cyan"));
+  console.log();
 
   if (providers.length > 0) {
     for (const p of providers) {
       const mark = p.id === defaultP?.id ? chalk.green("● ") : chalk.gray("  ");
-      console.log(`    ${mark}${p.name} ${chalk.gray(`(${p.type} — ${p.model})`)}`);
+      console.log(`    ${mark}${chalk.bold(p.name)} ${chalk.gray(`${p.type} · ${p.model}`)}`);
     }
     console.log();
+  } else {
+    console.log(chalk.gray("    등록된 프로바이더가 없습니다.\n"));
   }
 
-  console.log(`    ${chalk.cyan("1)")} 새 프로바이더 추가`);
-  if (providers.length > 1) {
-    console.log(`    ${chalk.cyan("2)")} 기본 프로바이더 변경`);
-  }
-  if (providers.length > 0) {
-    console.log(`    ${chalk.cyan("3)")} 프로바이더 삭제`);
-  }
-  console.log(`    ${chalk.cyan("b)")} 돌아가기`);
+  const items = ["새로 추가"];
+  if (providers.length > 1) items.push("기본 변경");
+  if (providers.length > 0) items.push("삭제");
+  items.push("돌아가기");
+
+  items.forEach((item, i) => {
+    console.log(`    ${chalk.cyan(`${i + 1}.`)} ${item}`);
+  });
   console.log();
 
-  const choice = await prompt(chalk.white("  선택: "));
+  const choice = await ask(chalk.cyan("  ❯ "));
+  const ci = parseInt(choice);
 
-  if (choice === "1") {
+  if (ci === 1) {
     await guidedProviderSetup();
-  } else if (choice === "2" && providers.length > 1) {
+  } else if (items[ci - 1] === "기본 변경") {
     console.log();
     providers.forEach((p, i) => {
-      console.log(`    ${chalk.cyan(`${i + 1})`)} ${p.name} (${p.model})`);
+      console.log(`    ${chalk.cyan(`${i + 1}.`)} ${p.name} (${p.model})`);
     });
     console.log();
-    const pc = await prompt(chalk.white("  번호: "));
+    const pc = await ask(chalk.cyan("  ❯ "));
     const pi = parseInt(pc) - 1;
     if (pi >= 0 && pi < providers.length) {
-      const { setDefaultProvider: setDef } = await import("../config/store.js");
-      setDef(providers[pi].id);
-      console.log(chalk.green(`  ✓ 기본 프로바이더: ${providers[pi].name}\n`));
+      const { setDefaultProvider } = await import("../config/store.js");
+      setDefaultProvider(providers[pi].id);
+      console.log(chalk.green(`  ✓ 기본: ${providers[pi].name}\n`));
     }
-  } else if (choice === "3" && providers.length > 0) {
+  } else if (items[ci - 1] === "삭제") {
     console.log();
     providers.forEach((p, i) => {
-      console.log(`    ${chalk.cyan(`${i + 1})`)} ${p.name} (${p.model})`);
+      console.log(`    ${chalk.cyan(`${i + 1}.`)} ${p.name} (${p.model})`);
     });
     console.log();
-    const dc = await prompt(chalk.white("  삭제할 번호: "));
+    const dc = await ask(chalk.white("  삭제할 번호: "));
     const di = parseInt(dc) - 1;
     if (di >= 0 && di < providers.length) {
-      const { removeProvider: rmProv } = await import("../config/store.js");
-      rmProv(providers[di].id);
-      console.log(chalk.green(`  ✓ 삭제됨: ${providers[di].name}\n`));
+      const { removeProvider } = await import("../config/store.js");
+      removeProvider(providers[di].id);
+      console.log(chalk.green(`  ✓ 삭제: ${providers[di].name}\n`));
     }
   }
 }

@@ -10,6 +10,7 @@ import { getAllToolDefs, executeTool, getToolNames } from "../agent/tools/index.
 import { McpManager, loadMcpConfig } from "../mcp/client.js";
 import { printError } from "../utils/format.js";
 import { guidedProviderSetup } from "./provider.js";
+import { box, divider, statusDot } from "../utils/ui.js";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 
 const SYSTEM_PROMPT = `You are OPEN XGEN Agent, an AI coding assistant running in the user's terminal.
@@ -58,19 +59,21 @@ export async function agentRepl(): Promise<void> {
   const messages: Message[] = [{ role: "system", content: SYSTEM_PROMPT }];
 
   // 헤더
-  console.log(chalk.cyan.bold("\n  OPEN XGEN Agent"));
-  console.log(chalk.gray("  ─────────────────────────────"));
-  console.log(chalk.gray(`  프로바이더: ${provider.name} (${provider.model})`));
-  console.log(chalk.gray(`  도구: ${getToolNames().join(", ")}`));
-  if (mcpManager && mcpManager.serverCount > 0) {
-    console.log(chalk.gray(`  MCP: ${mcpManager.getServerNames().join(", ")} (${mcpManager.getAllTools().length}개 도구)`));
-  }
-  console.log(chalk.gray(`  커맨드: /tools /provider /model /mcp /clear /home /exit`));
+  console.log();
+  console.log(box([
+    `${chalk.bold("OPEN XGEN Agent")}`,
+    ``,
+    `${chalk.gray("프로바이더")}  ${provider.name} ${chalk.gray("·")} ${provider.model}`,
+    `${chalk.gray("도구")}      ${getToolNames().length}개 내장${mcpManager && mcpManager.serverCount > 0 ? ` + ${mcpManager.getAllTools().length}개 MCP` : ""}`,
+    ``,
+    `${chalk.gray("무엇이든 물어보세요. 파일 읽기/쓰기, 코드 실행, 검색 가능.")}`,
+    `${chalk.gray("/help 도움말 · /home 홈 · /exit 종료")}`,
+  ]));
   console.log();
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (): Promise<string> =>
-    new Promise((resolve) => rl.question(chalk.green("❯ "), (a) => resolve(a.trim())));
+  const askUser = (): Promise<string> =>
+    new Promise((resolve) => rl.question(chalk.cyan.bold("  ❯ "), (a) => resolve(a.trim())));
 
   // Ctrl+C 처리
   process.on("SIGINT", () => {
@@ -81,7 +84,7 @@ export async function agentRepl(): Promise<void> {
   });
 
   while (true) {
-    const input = await ask();
+    const input = await askUser();
     if (!input) continue;
 
     // 슬래시 커맨드
@@ -91,9 +94,23 @@ export async function agentRepl(): Promise<void> {
       rl.close();
       break;
     }
+    if (input === "/help") {
+      console.log();
+      console.log(chalk.bold("  슬래시 커맨드"));
+      console.log(chalk.gray("  ─────────────────────────────"));
+      console.log(`  ${chalk.cyan("/tools")}     사용 가능한 도구 목록`);
+      console.log(`  ${chalk.cyan("/provider")}  현재 프로바이더 정보`);
+      console.log(`  ${chalk.cyan("/model")}     등록된 프로바이더 목록`);
+      console.log(`  ${chalk.cyan("/mcp")}       MCP 서버 상태`);
+      console.log(`  ${chalk.cyan("/clear")}     대화 초기화`);
+      console.log(`  ${chalk.cyan("/home")}      홈 메뉴로 돌아가기`);
+      console.log(`  ${chalk.cyan("/exit")}      종료`);
+      console.log();
+      continue;
+    }
     if (input === "/clear") {
       messages.length = 1;
-      console.log(chalk.gray("대화 초기화됨.\n"));
+      console.log(chalk.gray("  대화 초기화됨.\n"));
       continue;
     }
     if (input === "/tools") {
@@ -160,7 +177,13 @@ async function runAgentLoop(
   const MAX_ITERATIONS = 20;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    // AI 응답 시작
+    let first = true;
     const result = await streamChat(client, model, messages, tools, (delta) => {
+      if (first) {
+        process.stdout.write(chalk.green("\n  AI ›") + " ");
+        first = false;
+      }
       process.stdout.write(delta);
     });
 
@@ -195,7 +218,7 @@ async function runAgentLoop(
         args = {};
       }
 
-      console.log(chalk.gray(`  ⚙ ${tc.name}(`), chalk.dim(summarizeArgs(args)), chalk.gray(")"));
+      console.log(chalk.gray(`  ⚙ `) + chalk.white.bold(tc.name) + chalk.gray(` ${summarizeArgs(args)}`));
 
       let toolResult: string;
       if (mcpManager?.isMcpTool(tc.name)) {
