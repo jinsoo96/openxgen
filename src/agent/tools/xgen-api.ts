@@ -49,29 +49,9 @@ export const definitions: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "xgen_doc_list",
-      description: "XGEN 서버에서 문서 목록을 가져옵니다.",
-      parameters: {
-        type: "object",
-        properties: {
-          collection_id: { type: "string", description: "컬렉션 ID (선택)" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "xgen_ontology_query",
-      description: "온톨로지(GraphRAG)에 질문합니다. 지식 그래프 기반 검색.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "질의 내용" },
-          graph_id: { type: "string", description: "그래프 ID (선택)" },
-        },
-        required: ["query"],
-      },
+      name: "xgen_collection_list",
+      description: "XGEN 서버의 문서 컬렉션(지식베이스) 목록을 가져옵니다. 문서 수, 청크 수, 공유 상태 등 포함.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -115,10 +95,8 @@ export async function execute(name: string, args: Record<string, unknown>): Prom
         return await workflowRun(args);
       case "xgen_workflow_info":
         return await workflowInfo(args);
-      case "xgen_doc_list":
-        return await docList(args);
-      case "xgen_ontology_query":
-        return await ontologyQuery(args);
+      case "xgen_collection_list":
+        return await collectionList();
       case "xgen_server_status":
         return await serverStatus();
       case "xgen_execution_history":
@@ -172,23 +150,14 @@ async function workflowInfo(args: Record<string, unknown>): Promise<string> {
   return `워크플로우: ${detail.workflow_name}\nID: ${detail.id}\n노드: ${nodes}개\n엣지: ${edges}개`;
 }
 
-async function docList(args: Record<string, unknown>): Promise<string> {
-  const { listDocuments } = await import("../../api/document.js");
-  const docs = await listDocuments(args.collection_id as string | undefined);
-  if (!docs.length) return "문서 없음.";
-  return docs.map((d, i) =>
-    `${i + 1}. ${d.file_name ?? d.name ?? "-"} (${d.file_type ?? "-"}) — ${d.status ?? "-"}`
-  ).join("\n");
-}
-
-async function ontologyQuery(args: Record<string, unknown>): Promise<string> {
-  const { queryGraphRAG } = await import("../../api/ontology.js");
-  const result = await queryGraphRAG(args.query as string, args.graph_id as string | undefined);
-  let output = "";
-  if (result.answer) output += `답변: ${result.answer}\n`;
-  if (result.sources?.length) output += `출처: ${result.sources.join(", ")}\n`;
-  if (result.triples_used?.length) output += `트리플: ${result.triples_used.join("; ")}`;
-  return output || "결과 없음.";
+async function collectionList(): Promise<string> {
+  const { listCollections } = await import("../../api/document.js");
+  const cols = await listCollections();
+  if (!cols.length) return "컬렉션 없음.";
+  return cols.map((c, i) => {
+    const shared = c.is_shared ? ` [공유:${c.share_group}]` : "";
+    return `${i + 1}. ${c.collection_make_name}${shared}\n   문서: ${c.total_documents}개 · 청크: ${c.total_chunks}개 · 모델: ${c.init_embedding_model ?? "-"}`;
+  }).join("\n");
 }
 
 async function serverStatus(): Promise<string> {

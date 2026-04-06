@@ -1,9 +1,20 @@
 /**
- * 문서 API
+ * 문서/컬렉션 API — 실제 작동하는 엔드포인트
  */
 import { getClient } from "./client.js";
-import { createReadStream, statSync } from "node:fs";
-import { basename } from "node:path";
+
+export interface Collection {
+  id: number;
+  collection_make_name: string;
+  collection_name: string;
+  description?: string;
+  total_documents: number;
+  total_chunks: number;
+  is_shared: boolean;
+  share_group?: string;
+  init_embedding_model?: string;
+  created_at?: string;
+}
 
 export interface Document {
   id?: string;
@@ -16,13 +27,22 @@ export interface Document {
   file_size?: number;
 }
 
+export async function listCollections(): Promise<Collection[]> {
+  const client = getClient();
+  const res = await client.get("/api/retrieval/collections");
+  return Array.isArray(res.data) ? res.data : res.data.collections ?? [];
+}
+
 export async function listDocuments(collectionId?: string): Promise<Document[]> {
   const client = getClient();
-  const params: Record<string, string> = {};
-  if (collectionId) params.collection_id = collectionId;
-
-  const res = await client.get("/api/documents/list", { params });
-  return res.data.documents ?? res.data ?? [];
+  try {
+    const params: Record<string, string> = {};
+    if (collectionId) params.collection_id = collectionId;
+    const res = await client.get("/api/retrieval/documents/list", { params });
+    return res.data.documents ?? res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function uploadDocument(
@@ -31,27 +51,25 @@ export async function uploadDocument(
   name?: string
 ): Promise<unknown> {
   const client = getClient();
+  const { createReadStream, statSync } = await import("node:fs");
+  const { basename } = await import("node:path");
   const stat = statSync(filePath);
   const fileName = name || basename(filePath);
-
-  const FormData = (await import("node:buffer")).Blob ? globalThis.FormData : null;
-  if (!FormData) throw new Error("FormData not available");
 
   const form = new FormData();
   const fileBlob = new Blob([createReadStream(filePath) as unknown as BlobPart]);
   form.append("file", fileBlob, fileName);
   if (collectionId) form.append("collection_id", collectionId);
 
-  const res = await client.post("/api/documents/upload", form, {
+  const res = await client.post("/api/retrieval/documents/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
     maxBodyLength: stat.size + 1024 * 1024,
   });
-
   return res.data;
 }
 
 export async function getDocumentInfo(docId: string): Promise<Document> {
   const client = getClient();
-  const res = await client.get(`/api/documents/${docId}`);
+  const res = await client.get(`/api/retrieval/documents/${docId}`);
   return res.data;
 }
