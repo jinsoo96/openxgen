@@ -1,8 +1,26 @@
 # OPEN XGEN
 
-AI Coding Agent + XGEN Platform CLI.
+터미널에서 모든 걸 하는 AI 에이전트. XGEN 플랫폼 + 코딩을 채팅 하나로.
 
-터미널에서 AI 코딩 에이전트, 워크플로우 실행, 문서 관리, 온톨로지 질의. OpenAI/Gemini/Ollama 등 멀티 프로바이더 지원.
+```
+────────────────────────────────────────────────────────────
+  ✦ OPEN XGEN
+────────────────────────────────────────────────────────────
+
+  model  gpt-4.1
+  xgen   ● admin@xgen.x2bee.com
+  cwd    ~/project
+
+  무엇이든 물어보세요. /help
+
+  ❯ 워크플로우 보여줘
+  ┌ xgen_workflow_list()
+  └ 1. Jeju_test…
+
+  ❯ 6번 실행해줘
+  ┌ xgen_workflow_run(...)
+  └ 결과: ...
+```
 
 ## 설치
 
@@ -10,93 +28,81 @@ AI Coding Agent + XGEN Platform CLI.
 npm install -g openxgen
 ```
 
-> 권한 오류(`EACCES`) 시: `sudo npm install -g openxgen` 또는 [nvm](https://github.com/nvm-sh/nvm) 사용 권장
+> 권한 오류 시: `sudo npm install -g openxgen`
 
-## 빠른 시작
-
-### AI 에이전트 모드
+## 시작
 
 ```bash
-# 프로바이더 설정 (OpenAI, Gemini, Ollama 등)
-xgen provider add
-
-# AI 코딩 에이전트 시작
-xgen agent
-
-# 또는 바로
 xgen
 ```
 
-### XGEN 플랫폼 모드
+끝. 처음 실행하면 프로바이더(OpenAI, Gemini, Ollama 등) 설정 가이드가 나옵니다.
 
-```bash
-# 서버 연결
-xgen config set-server https://xgen.x2bee.com
-xgen login
+## 채팅으로 전부 가능
 
-# 워크플로우
-xgen wf ls                      # 목록
-xgen wf run <id> "질문"         # 실행
-xgen chat                       # 대화 모드
-
-# 문서
-xgen doc ls                     # 목록
-xgen doc upload <file>          # 업로드
-
-# 온톨로지
-xgen ont query "질문"           # GraphRAG 질의
-xgen ont chat                   # 멀티턴 대화
+```
+❯ 워크플로우 목록            → 워크플로우 53개 표시
+❯ 6번 실행 "안녕하세요"      → 바로 실행
+❯ 컬렉션 뭐 있어            → 문서 컬렉션 22개 표시
+❯ 이 폴더 파일 보여줘        → 현재 디렉토리 파일 목록
+❯ main.py 읽어줘             → 파일 내용 표시
+❯ Python fibonacci 만들어줘  → 코드 생성 + 파일 저장
+❯ npm test 실행              → 셸 명령어 실행
 ```
 
-## 커맨드
+## 슬래시 커맨드
 
 | 커맨드 | 설명 |
 |--------|------|
-| `xgen` | 에이전트 또는 채팅 모드 (설정에 따라) |
-| `xgen agent` | AI 코딩 에이전트 |
-| `xgen provider add/ls/use/remove` | 프로바이더 관리 |
-| `xgen chat [id]` | 워크플로우 대화 |
-| `xgen wf ls/info/run/history` | 워크플로우 관리 |
-| `xgen doc ls/upload/info` | 문서 관리 |
-| `xgen ont query/chat/stats` | 온톨로지 질의 |
-| `xgen config` | 설정 관리 |
-| `xgen login/logout/whoami` | 인증 |
+| `/connect` | XGEN 서버 연결 (본사/제주/롯데몰 프리셋) |
+| `/env` | 환경 전환 |
+| `/provider` | AI 프로바이더 변경 |
+| `/dashboard` | TUI 대시보드 (4분할 화면) |
+| `/tools` | 사용 가능한 도구 목록 |
+| `/status` | 현재 연결 상태 |
+| `/clear` | 대화 초기화 |
+| `/help` | 도움말 |
 
-## AI 에이전트 도구
+## AI 도구
 
-에이전트 모드에서 AI가 사용할 수 있는 도구:
+### 코딩
+`file_read` `file_write` `file_edit` `bash` `grep` `list_files` `sandbox_run`
 
-- **file_read** — 파일 읽기
-- **file_write** — 파일 생성/덮어쓰기
-- **file_edit** — 파일 내 텍스트 교체
-- **bash** — 셸 명령어 실행
-- **grep** — 파일 내 패턴 검색
-- **list_files** — 디렉토리 목록 / glob 검색
+### XGEN 플랫폼
+`xgen_workflow_list` `xgen_workflow_run` `xgen_workflow_info` `xgen_collection_list` `xgen_execution_history` `xgen_server_status`
 
-## 프로바이더 지원
+### MCP
+`.mcp.json` 설정 시 MCP 서버 도구 자동 연동
 
-| 프로바이더 | 타입 | 비고 |
-|-----------|------|------|
-| OpenAI | `openai` | GPT-4o, GPT-4o-mini 등 |
-| Google Gemini | `gemini` | OpenAI 호환 엔드포인트 사용 |
-| Ollama | `ollama` | 로컬 모델 (API Key 불필요) |
-| Anthropic | `anthropic` | Claude 모델 |
-| Custom | `custom` | OpenAI 호환 API 서버 |
+## 프로바이더
+
+| 프로바이더 | 모델 |
+|-----------|------|
+| OpenAI | gpt-4o, gpt-4.1, gpt-4o-mini, o3-mini |
+| Google Gemini | gemini-2.5-pro, gemini-2.0-flash |
+| Anthropic | claude-opus-4, claude-sonnet-4 |
+| Ollama | llama3.1, codellama, qwen2.5-coder |
+| Groq | llama-3.3-70b, mixtral-8x7b |
+| Together AI | Meta-Llama-3.1-70B |
+| OpenRouter | 멀티 모델 |
+| DeepSeek | deepseek-chat, deepseek-coder |
+| Custom | OpenAI 호환 서버 |
 
 ## 설정 파일
 
 ```
 ~/.xgen/
-├── config.json      # 서버 URL, 테마 등
-├── auth.json        # XGEN 로그인 토큰
-└── providers.json   # AI 프로바이더 설정
+├── config.json        서버 URL
+├── auth.json          로그인 토큰
+├── providers.json     AI 프로바이더
+└── environments.json  서버 환경 프로필
 ```
 
 ## 개발
 
 ```bash
-git clone <repo>
-cd xgen-cli
+git clone https://github.com/jinsoo96/openxgen.git
+cd openxgen
 npm install
 npm run build
 npm run dev     # watch 모드
