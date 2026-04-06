@@ -1,6 +1,6 @@
 {
   "name": "openxgen",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "OPEN XGEN — AI Coding Agent + XGEN Platform CLI",
   "license": "MIT",
   "keywords": ["xgen", "cli", "ai", "agent", "workflow", "ontology", "coding-agent"],
