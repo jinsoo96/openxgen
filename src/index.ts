@@ -18,7 +18,6 @@ import { registerAgentCommand, agentRepl } from "./commands/agent.js";
 import { registerDocCommand } from "./commands/doc.js";
 import { registerOntologyCommand } from "./commands/ontology.js";
 import { getAuth, getServer, getDefaultProvider } from "./config/store.js";
-import { homeMenu } from "./commands/home.js";
 
 const VERSION = "0.3.0";
 
@@ -78,9 +77,9 @@ registerAgentCommand(program);
 registerDocCommand(program);
 registerOntologyCommand(program);
 
-// 인자 없이 실행: 홈 메뉴
+// 인자 없이 실행: 바로 에이전트 (Claude Code 스타일)
 if (process.argv.length <= 2) {
-  homeMenu().catch((err) => {
+  agentRepl().catch((err) => {
     console.error(chalk.red(`오류: ${err.message}`));
     process.exit(1);
   });
