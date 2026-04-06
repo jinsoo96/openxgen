@@ -79,12 +79,19 @@ export async function executeWorkflowStream(
 }
 
 /**
- * 워크플로우 실행 (non-stream)
+ * 워크플로우 실행 (non-stream, deploy 엔드포인트)
+ * K3s Istio 환경에서 based_id/stream은 Next.js로 라우팅되어 CLI 접근 불가
+ * deploy/result 엔드포인트 사용
  */
 export async function executeWorkflow(
-  request: WorkflowExecuteRequest
+  request: WorkflowExecuteRequest & { deploy_key?: string }
 ): Promise<unknown> {
   const client = getClient();
+  // deploy_key가 있으면 deploy 엔드포인트, 없으면 based_id
+  if (request.deploy_key) {
+    const res = await client.post("/api/workflow/execute/deploy/result", request);
+    return res.data;
+  }
   const res = await client.post("/api/workflow/execute/based_id", request);
   return res.data;
 }

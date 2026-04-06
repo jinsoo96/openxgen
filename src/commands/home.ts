@@ -66,8 +66,8 @@ export async function homeMenu(): Promise<void> {
         key: "w", label: "워크플로우 관리",
         hint: "목록 조회 → 선택 → 실행/정보",
         action: async () => {
-          const { listWorkflows } = await import("../api/workflow.js");
-          const wfs = await listWorkflows();
+          const { getWorkflowListDetail } = await import("../api/workflow.js");
+          const wfs = await getWorkflowListDetail();
           if (!wfs.length) {
             console.log(chalk.yellow("\n  워크플로우가 없습니다.\n"));
             return;
@@ -91,8 +91,32 @@ export async function homeMenu(): Promise<void> {
           console.log(chalk.green(`\n  ✓ ${selected.workflow_name}\n`));
           const input = await ask(chalk.white("  메시지: "));
           if (!input) return;
-          const { workflowRun } = await import("./workflow/run.js");
-          await workflowRun(wfId, input, { logs: false, interactive: false });
+          // deploy 된 워크플로우면 deploy 엔드포인트, 아니면 non-stream
+          const deployKey = (selected as Record<string, unknown>).deploy_key as string | undefined;
+          const isDeployed = (selected as Record<string, unknown>).is_deployed;
+          try {
+            console.log(chalk.gray("\n  실행 중...\n"));
+            const { executeWorkflow } = await import("../api/workflow.js");
+            const { randomUUID } = await import("node:crypto");
+            const result = await executeWorkflow({
+              workflow_id: wfId,
+              workflow_name: selected.workflow_name,
+              input_data: input,
+              interaction_id: `cli_${randomUUID().slice(0, 8)}`,
+              deploy_key: isDeployed && deployKey ? deployKey : undefined,
+            }) as Record<string, unknown>;
+            if (result.content) {
+              console.log(chalk.bold("  응답:"));
+              console.log(`  ${result.content}\n`);
+            } else if (result.success === false) {
+              console.log(chalk.red(`  오류: ${result.error ?? result.message}\n`));
+            } else {
+              console.log(chalk.gray(JSON.stringify(result, null, 2).slice(0, 500)));
+              console.log();
+            }
+          } catch (err) {
+            console.log(chalk.red(`  실행 실패: ${(err as Error).message}\n`));
+          }
         },
       });
 
