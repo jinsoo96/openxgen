@@ -1,6 +1,6 @@
 {
   "name": "openxgen",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "OPEN XGEN — AI Coding Agent + XGEN Platform CLI",
   "license": "MIT",
   "keywords": [
@@ -29,7 +29,9 @@
     "link": "npm run build && npm link"
   },
   "dependencies": {
+    "@types/blessed": "^0.1.27",
     "axios": "^1.7.0",
+    "blessed": "^0.1.81",
     "chalk": "^5.3.0",
     "cli-highlight": "^2.1.11",
     "commander": "^12.1.0",

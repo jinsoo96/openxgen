@@ -77,11 +77,11 @@ registerAgentCommand(program);
 registerDocCommand(program);
 registerOntologyCommand(program);
 
-// 인자 없이 실행: 대시보드 (TTY) 또는 에이전트 (non-TTY)
+// 인자 없이 실행: TUI 대시보드 (TTY) 또는 에이전트 (non-TTY)
 if (process.argv.length <= 2) {
   if (process.stdin.isTTY) {
-    import("./dashboard/index.js").then(({ dashboard }) =>
-      dashboard().catch((err) => {
+    import("./dashboard/tui.js").then(({ startTui }) =>
+      startTui().catch((err) => {
         console.error(chalk.red(`오류: ${err.message}`));
         process.exit(1);
       })

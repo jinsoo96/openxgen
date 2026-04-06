@@ -9,5 +9,6 @@ export default defineConfig({
   sourcemap: true,
   dts: false,
   splitting: false,
+  banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
   // shebang은 bin/xgen에서 처리
 });
