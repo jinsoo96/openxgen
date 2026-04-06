@@ -49,10 +49,21 @@ EXAMPLES OF GOOD RESPONSES:
     prompt += `
 
 XGEN CONNECTED: ${server} as ${auth.username} (${env?.name ?? "default"})
-- Workflow execute uses deploy_key for deployed workflows.
-- If workflow execution returns 404, it means the Istio routing blocks direct stream access. Use deploy endpoint.`;
+
+XGEN CAPABILITIES (use these tools naturally):
+- xgen_workflow_list: 워크플로우 전체 목록. 배포 상태, ID, deploy_key 포함.
+- xgen_workflow_run: 워크플로우 실행. deploy_key 필요(배포된 것만 실행 가능). 사용자가 번호나 이름 말하면 이전 목록에서 찾아서 바로 실행.
+- xgen_workflow_info: 워크플로우 상세 (노드, 엣지 수 등). user_id=1 필요.
+- xgen_collection_list: 문서 컬렉션 목록 (RAG 지식베이스). 문서 수, 청크 수 포함.
+- xgen_execution_history: 최근 실행 이력.
+- xgen_server_status: 서버 연결 상태.
+
+WORKFLOW EXECUTION NOTES:
+- 배포된 워크플로우만 실행 가능. deploy_key가 있어야 함.
+- 실행 시 input_data에 사용자 메시지를 넣음.
+- 실행 결과의 content가 응답.`;
   } else {
-    prompt += `\nXGEN: Not connected. Tell user to run /connect.`;
+    prompt += `\nXGEN: Not connected. User can run /connect to connect.`;
   }
 
   return prompt;
@@ -255,9 +266,9 @@ async function runLoop(
 
       const shortArgs = Object.entries(args).map(([k, v]) => {
         const s = String(v);
-        return `${k}=${s.length > 30 ? s.slice(0, 30) + "…" : s}`;
-      }).join(" ");
-      console.log(chalk.gray(`  ⚙ ${chalk.white(tc.name)} ${shortArgs}`));
+        return s.length > 40 ? s.slice(0, 40) + "…" : s;
+      }).join(", ");
+      console.log(chalk.dim(`  ┌ ${tc.name}(${shortArgs})`));
 
       let toolResult: string;
       if (isXgenTool(tc.name)) {
@@ -269,6 +280,9 @@ async function runLoop(
       }
 
       const truncated = toolResult.length > 4000 ? toolResult.slice(0, 4000) + "\n…(truncated)" : toolResult;
+      // 도구 결과 미리보기 (1줄)
+      const preview = toolResult.split("\n")[0].slice(0, 60);
+      console.log(chalk.dim(`  └ ${preview}${toolResult.length > 60 ? "…" : ""}`));
       messages.push({ role: "tool", tool_call_id: tc.id, content: truncated });
     }
   }
