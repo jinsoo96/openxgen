@@ -77,12 +77,21 @@ registerAgentCommand(program);
 registerDocCommand(program);
 registerOntologyCommand(program);
 
-// 인자 없이 실행: 바로 에이전트 (Claude Code 스타일)
+// 인자 없이 실행: 대시보드 (TTY) 또는 에이전트 (non-TTY)
 if (process.argv.length <= 2) {
-  agentRepl().catch((err) => {
-    console.error(chalk.red(`오류: ${err.message}`));
-    process.exit(1);
-  });
+  if (process.stdin.isTTY) {
+    import("./dashboard/index.js").then(({ dashboard }) =>
+      dashboard().catch((err) => {
+        console.error(chalk.red(`오류: ${err.message}`));
+        process.exit(1);
+      })
+    );
+  } else {
+    agentRepl().catch((err) => {
+      console.error(chalk.red(`오류: ${err.message}`));
+      process.exit(1);
+    });
+  }
 } else {
   program.parse();
 }
