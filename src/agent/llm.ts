@@ -19,6 +19,12 @@ export function createLLMClient(provider: ProviderConfig): OpenAI {
   return new OpenAI(opts);
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface StreamResult {
   content: string;
   toolCalls: {
@@ -26,6 +32,7 @@ export interface StreamResult {
     name: string;
     arguments: string;
   }[];
+  usage: TokenUsage | null;
 }
 
 /**
@@ -42,6 +49,7 @@ export async function streamChat(
     model,
     messages,
     stream: true,
+    stream_options: { include_usage: true },
   };
 
   if (tools && tools.length > 0) {
@@ -51,9 +59,19 @@ export async function streamChat(
   const stream = await client.chat.completions.create(params);
 
   let content = "";
+  let usage: TokenUsage | null = null;
   const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
 
   for await (const chunk of stream) {
+    // usage는 마지막 청크에 포함
+    if (chunk.usage) {
+      usage = {
+        promptTokens: chunk.usage.prompt_tokens ?? 0,
+        completionTokens: chunk.usage.completion_tokens ?? 0,
+        totalTokens: chunk.usage.total_tokens ?? 0,
+      };
+    }
+
     const delta = chunk.choices[0]?.delta;
     if (!delta) continue;
 
@@ -79,5 +97,6 @@ export async function streamChat(
   return {
     content,
     toolCalls: [...toolCallMap.values()],
+    usage,
   };
 }

@@ -1,112 +1,114 @@
-# OPEN XGEN
+# OPEN XGEN CLI
 
-터미널에서 모든 걸 하는 AI 에이전트. XGEN 플랫폼 + 코딩을 채팅 하나로.
+A terminal-based AI coding agent and XGEN platform CLI. Chat-first interface inspired by Claude Code — talk to your AI, manage workflows, query knowledge graphs, and handle documents, all from the terminal.
 
-```
-────────────────────────────────────────────────────────────
-  ✦ OPEN XGEN
-────────────────────────────────────────────────────────────
-
-  model  gpt-4.1
-  xgen   ● admin@xgen.x2bee.com
-  cwd    ~/project
-
-  무엇이든 물어보세요. /help
-
-  ❯ 워크플로우 보여줘
-  ┌ xgen_workflow_list()
-  └ 1. Jeju_test…
-
-  ❯ 6번 실행해줘
-  ┌ xgen_workflow_run(...)
-  └ 결과: ...
-```
-
-## 설치
+## Install
 
 ```bash
 npm install -g openxgen
 ```
 
-> 권한 오류 시: `sudo npm install -g openxgen`
-
-## 시작
+## Quick Start
 
 ```bash
 xgen
 ```
 
-끝. 처음 실행하면 프로바이더(OpenAI, Gemini, Ollama 등) 설정 가이드가 나옵니다.
+That's it. On first run, you'll be guided through provider setup (OpenAI, Gemini, Anthropic, Ollama, etc.).
 
-## 채팅으로 전부 가능
+## What It Does
 
 ```
-❯ 워크플로우 목록            → 워크플로우 53개 표시
-❯ 6번 실행 "안녕하세요"      → 바로 실행
-❯ 컬렉션 뭐 있어            → 문서 컬렉션 22개 표시
-❯ 이 폴더 파일 보여줘        → 현재 디렉토리 파일 목록
-❯ main.py 읽어줘             → 파일 내용 표시
-❯ Python fibonacci 만들어줘  → 코드 생성 + 파일 저장
-❯ npm test 실행              → 셸 명령어 실행
+❯ show workflows          → lists all XGEN workflows
+❯ run #6 "hello"          → executes workflow immediately
+❯ collections             → shows document collections
+❯ list files in ./src     → browses local filesystem
+❯ read main.py            → displays file contents
+❯ write a fibonacci func  → generates code + saves file
+❯ run npm test            → executes shell command
 ```
 
-## 슬래시 커맨드
+No menus, no wizards. Just tell it what you want.
 
-| 커맨드 | 설명 |
-|--------|------|
-| `/connect` | XGEN 서버 연결 (본사/제주/롯데몰 프리셋) |
-| `/env` | 환경 전환 |
-| `/provider` | AI 프로바이더 변경 |
-| `/dashboard` | TUI 대시보드 (4분할 화면) |
-| `/tools` | 사용 가능한 도구 목록 |
-| `/status` | 현재 연결 상태 |
-| `/clear` | 대화 초기화 |
-| `/help` | 도움말 |
+## Features
 
-## AI 도구
+### AI Agent
+- **9 providers**: OpenAI, Gemini, Anthropic, Ollama, Groq, Together AI, OpenRouter, DeepSeek, Custom (OpenAI-compatible)
+- **50+ models** with auto-detection from environment variables
+- **Streaming** responses with multi-step tool calling (up to 20 rounds)
+- **Token usage** tracking per response and per session
 
-### 코딩
+### Built-in Tools (7)
 `file_read` `file_write` `file_edit` `bash` `grep` `list_files` `sandbox_run`
 
-### XGEN 플랫폼
-`xgen_workflow_list` `xgen_workflow_run` `xgen_workflow_info` `xgen_collection_list` `xgen_execution_history` `xgen_server_status`
+### XGEN Platform Tools (10)
+`xgen_workflow_list` `xgen_workflow_run` `xgen_workflow_info` `xgen_collection_list` `xgen_document_list` `xgen_document_upload` `xgen_graph_rag_query` `xgen_graph_stats` `xgen_execution_history` `xgen_server_status`
 
-### MCP
-`.mcp.json` 설정 시 MCP 서버 도구 자동 연동
+### MCP Integration
+Reads `.mcp.json` and auto-connects to MCP servers (stdio transport).
 
-## 프로바이더
+### Conversation History
+Save and restore chat sessions. Auto-stored in `~/.xgen/conversations/`.
 
-| 프로바이더 | 모델 |
-|-----------|------|
+### TUI Dashboard
+4-panel blessed-based dashboard: workflows | details | collections | AI chat.
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/connect` | Connect to XGEN server (HQ / Jeju / Lotte presets) |
+| `/env` | Switch environment |
+| `/provider` | Change AI provider |
+| `/dashboard` | Open TUI dashboard |
+| `/tools` | List available tools |
+| `/status` | Show connection status |
+| `/save [name]` | Save conversation |
+| `/load` | Load previous conversation |
+| `/conversations` | List saved conversations |
+| `/usage` | Show token usage |
+| `/clear` | Reset conversation |
+| `/exit` | Quit |
+
+## Providers
+
+| Provider | Models |
+|----------|--------|
 | OpenAI | gpt-4o, gpt-4.1, gpt-4o-mini, o3-mini |
 | Google Gemini | gemini-2.5-pro, gemini-2.0-flash |
 | Anthropic | claude-opus-4, claude-sonnet-4 |
 | Ollama | llama3.1, codellama, qwen2.5-coder |
 | Groq | llama-3.3-70b, mixtral-8x7b |
 | Together AI | Meta-Llama-3.1-70B |
-| OpenRouter | 멀티 모델 |
+| OpenRouter | multi-model proxy |
 | DeepSeek | deepseek-chat, deepseek-coder |
-| Custom | OpenAI 호환 서버 |
+| Custom | any OpenAI-compatible endpoint |
 
-## 설정 파일
+## Config
 
 ```
 ~/.xgen/
-├── config.json        서버 URL
-├── auth.json          로그인 토큰
-├── providers.json     AI 프로바이더
-└── environments.json  서버 환경 프로필
+├── config.json          server URL, defaults
+├── auth.json            login tokens
+├── providers.json       AI providers
+├── environments.json    server profiles
+└── conversations/       saved chat sessions
 ```
 
-## 개발
+## Development
 
 ```bash
 git clone https://github.com/jinsoo96/openxgen.git
 cd openxgen
 npm install
 npm run build
-npm run dev     # watch 모드
+npm run dev     # watch mode
 ```
+
+## Links
+
+- npm: https://www.npmjs.com/package/openxgen
+- GitHub: https://github.com/jinsoo96/openxgen
 
 ## License
 

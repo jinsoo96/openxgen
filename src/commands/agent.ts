@@ -5,8 +5,11 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { createInterface } from "node:readline";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { getDefaultProvider, getServer, getAuth, getEnvironments, getActiveEnvironment } from "../config/store.js";
-import { createLLMClient, streamChat, type Message } from "../agent/llm.js";
+import { createLLMClient, streamChat, type Message, type TokenUsage } from "../agent/llm.js";
 import { getAllToolDefs, executeTool, getToolNames } from "../agent/tools/index.js";
 import { definitions as xgenToolDefs, execute as xgenExecute, isXgenTool } from "../agent/tools/xgen-api.js";
 import { McpManager, loadMcpConfig } from "../mcp/client.js";
@@ -55,6 +58,10 @@ XGEN CAPABILITIES (use these tools naturally):
 - xgen_workflow_run: 워크플로우 실행. deploy_key 필요(배포된 것만 실행 가능). 사용자가 번호나 이름 말하면 이전 목록에서 찾아서 바로 실행.
 - xgen_workflow_info: 워크플로우 상세 (노드, 엣지 수 등). user_id=1 필요.
 - xgen_collection_list: 문서 컬렉션 목록 (RAG 지식베이스). 문서 수, 청크 수 포함.
+- xgen_document_list: 특정 컬렉션의 문서 목록 조회.
+- xgen_document_upload: 파일을 컬렉션에 업로드.
+- xgen_graph_rag_query: GraphRAG 온톨로지 질의. 지식그래프 기반 답변.
+- xgen_graph_stats: 그래프 통계 (노드, 엣지, 클래스, 인스턴스 수).
 - xgen_execution_history: 최근 실행 이력.
 - xgen_server_status: 서버 연결 상태.
 
@@ -69,7 +76,67 @@ WORKFLOW EXECUTION NOTES:
   return prompt;
 }
 
+// ── 대화 이력 ──
+const CONV_DIR = join(homedir(), ".xgen", "conversations");
+
+function ensureConvDir(): void {
+  if (!existsSync(CONV_DIR)) mkdirSync(CONV_DIR, { recursive: true });
+}
+
+function saveConversation(messages: Message[], name?: string): string {
+  ensureConvDir();
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const filename = `${name || ts}.json`;
+  const filepath = join(CONV_DIR, filename);
+  // system 프롬프트 제외하고 저장
+  const toSave = messages.filter((m) => m.role !== "system");
+  writeFileSync(filepath, JSON.stringify(toSave, null, 2), "utf-8");
+  return filename;
+}
+
+function listConversations(): { name: string; date: string; msgs: number }[] {
+  ensureConvDir();
+  const files = readdirSync(CONV_DIR).filter((f) => f.endsWith(".json")).sort().reverse();
+  return files.slice(0, 20).map((f) => {
+    try {
+      const data = JSON.parse(readFileSync(join(CONV_DIR, f), "utf-8")) as Message[];
+      const userMsgs = data.filter((m) => m.role === "user").length;
+      return { name: f.replace(".json", ""), date: f.slice(0, 10), msgs: userMsgs };
+    } catch {
+      return { name: f.replace(".json", ""), date: "", msgs: 0 };
+    }
+  });
+}
+
+function loadConversation(name: string): Message[] | null {
+  const filepath = join(CONV_DIR, `${name}.json`);
+  if (!existsSync(filepath)) return null;
+  try {
+    return JSON.parse(readFileSync(filepath, "utf-8")) as Message[];
+  } catch {
+    return null;
+  }
+}
+
 let mcpManager: McpManager | null = null;
+
+// 세션 토큰 추적
+const sessionUsage = { prompt: 0, completion: 0, total: 0, calls: 0 };
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
+  return String(n);
+}
+
+function showUsage(usage: TokenUsage | null): void {
+  if (!usage || usage.totalTokens === 0) return;
+  sessionUsage.prompt += usage.promptTokens;
+  sessionUsage.completion += usage.completionTokens;
+  sessionUsage.total += usage.totalTokens;
+  sessionUsage.calls++;
+  console.log(chalk.gray(`  tokens: ${formatTokens(usage.promptTokens)}→${formatTokens(usage.completionTokens)} (session: ${formatTokens(sessionUsage.total)})`));
+}
 
 export async function agentRepl(): Promise<void> {
   // 프로바이더 확인/설정
@@ -144,14 +211,18 @@ export async function agentRepl(): Promise<void> {
     if (input === "/help") {
       console.log(`
   ${chalk.bold("슬래시 커맨드")}
-  ${chalk.cyan("/connect")}    XGEN 서버 연결 + 로그인
-  ${chalk.cyan("/env")}        환경 전환 (본사/제주/롯데몰)
-  ${chalk.cyan("/provider")}  프로바이더 변경
-  ${chalk.cyan("/dashboard")} TUI 대시보드 (4분할 화면)
-  ${chalk.cyan("/tools")}     사용 가능한 도구 목록
-  ${chalk.cyan("/status")}    현재 연결 상태
-  ${chalk.cyan("/clear")}     대화 초기화
-  ${chalk.cyan("/exit")}      종료
+  ${chalk.cyan("/connect")}         XGEN 서버 연결 + 로그인
+  ${chalk.cyan("/env")}             환경 전환 (본사/제주/롯데몰)
+  ${chalk.cyan("/provider")}       프로바이더 변경
+  ${chalk.cyan("/dashboard")}      TUI 대시보드 (4분할 화면)
+  ${chalk.cyan("/tools")}          사용 가능한 도구 목록
+  ${chalk.cyan("/status")}         현재 연결 상태
+  ${chalk.cyan("/save [이름]")}    대화 저장
+  ${chalk.cyan("/load")}           이전 대화 불러오기
+  ${chalk.cyan("/conversations")}  저장된 대화 목록
+  ${chalk.cyan("/usage")}          토큰 사용량
+  ${chalk.cyan("/clear")}          대화 초기화
+  ${chalk.cyan("/exit")}           종료
 `);
       continue;
     }
@@ -159,7 +230,63 @@ export async function agentRepl(): Promise<void> {
     if (input === "/clear") {
       messages.length = 0;
       messages.push({ role: "system", content: buildSystemPrompt() });
+      sessionUsage.prompt = 0; sessionUsage.completion = 0; sessionUsage.total = 0; sessionUsage.calls = 0;
       console.log(chalk.gray("  대화 초기화됨.\n"));
+      continue;
+    }
+
+    if (input.startsWith("/save")) {
+      const name = input.slice(5).trim() || undefined;
+      const filename = saveConversation(messages, name);
+      console.log(chalk.green(`  ✓ 저장됨: ${filename}\n`));
+      continue;
+    }
+
+    if (input === "/conversations" || input === "/convs") {
+      const convs = listConversations();
+      if (!convs.length) {
+        console.log(chalk.gray("\n  저장된 대화 없음.\n"));
+      } else {
+        console.log();
+        convs.forEach((c, i) => {
+          console.log(`  ${chalk.cyan(`${i + 1}.`)} ${c.name} ${chalk.gray(`(${c.msgs}턴)`)}`);
+        });
+        console.log();
+      }
+      continue;
+    }
+
+    if (input === "/load") {
+      const convs = listConversations();
+      if (!convs.length) {
+        console.log(chalk.gray("\n  저장된 대화 없음.\n"));
+        continue;
+      }
+      console.log();
+      convs.forEach((c, i) => {
+        console.log(`  ${chalk.cyan(`${i + 1}.`)} ${c.name} ${chalk.gray(`(${c.msgs}턴)`)}`);
+      });
+      console.log();
+      const choice = await askUser();
+      const ci = parseInt(choice) - 1;
+      if (ci >= 0 && ci < convs.length) {
+        const loaded = loadConversation(convs[ci].name);
+        if (loaded) {
+          messages.length = 0;
+          messages.push({ role: "system", content: buildSystemPrompt() });
+          messages.push(...loaded);
+          console.log(chalk.green(`  ✓ "${convs[ci].name}" 불러옴 (${loaded.filter((m) => m.role === "user").length}턴)\n`));
+        }
+      }
+      continue;
+    }
+
+    if (input === "/usage") {
+      console.log(`\n  ${chalk.bold("세션 토큰 사용량")}`);
+      console.log(`  프롬프트:  ${formatTokens(sessionUsage.prompt)}`);
+      console.log(`  응답:      ${formatTokens(sessionUsage.completion)}`);
+      console.log(`  합계:      ${formatTokens(sessionUsage.total)}`);
+      console.log(`  API 호출:  ${sessionUsage.calls}회\n`);
       continue;
     }
 
@@ -247,6 +374,7 @@ async function runLoop(
 
     if (result.toolCalls.length === 0) {
       if (result.content) messages.push({ role: "assistant", content: result.content });
+      showUsage(result.usage);
       return;
     }
 

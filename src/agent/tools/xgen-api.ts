@@ -75,6 +75,63 @@ export const definitions: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "xgen_document_list",
+      description: "특정 컬렉션의 문서 목록을 가져옵니다.",
+      parameters: {
+        type: "object",
+        properties: {
+          collection_id: { type: "string", description: "컬렉션 ID" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "xgen_document_upload",
+      description: "문서를 XGEN 컬렉션에 업로드합니다.",
+      parameters: {
+        type: "object",
+        properties: {
+          file_path: { type: "string", description: "업로드할 파일 경로" },
+          collection_id: { type: "string", description: "대상 컬렉션 ID" },
+        },
+        required: ["file_path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "xgen_graph_rag_query",
+      description: "GraphRAG로 온톨로지 지식그래프에 질의합니다.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "질의 내용" },
+          graph_id: { type: "string", description: "그래프 ID (선택)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "xgen_graph_stats",
+      description: "온톨로지 그래프 통계(노드, 엣지, 클래스, 인스턴스 수)를 가져옵니다.",
+      parameters: {
+        type: "object",
+        properties: {
+          graph_id: { type: "string", description: "그래프 ID" },
+        },
+        required: ["graph_id"],
+      },
+    },
+  },
 ];
 
 // ── 도구 실행 ──
@@ -101,6 +158,14 @@ export async function execute(name: string, args: Record<string, unknown>): Prom
         return await serverStatus();
       case "xgen_execution_history":
         return await executionHistory(args);
+      case "xgen_document_list":
+        return await documentList(args);
+      case "xgen_document_upload":
+        return await documentUpload(args);
+      case "xgen_graph_rag_query":
+        return await graphRagQuery(args);
+      case "xgen_graph_stats":
+        return await graphStats(args);
       default:
         return `Unknown XGEN tool: ${name}`;
     }
@@ -174,4 +239,42 @@ async function executionHistory(args: Record<string, unknown>): Promise<string> 
   return logs.map((l, i) =>
     `${i + 1}. [${l.created_at ?? ""}]\n   입력: ${(l.input_data ?? "").slice(0, 80)}\n   출력: ${(l.output_data ?? "").slice(0, 80)}`
   ).join("\n");
+}
+
+async function documentList(args: Record<string, unknown>): Promise<string> {
+  const { listDocuments } = await import("../../api/document.js");
+  const docs = await listDocuments(args.collection_id as string | undefined);
+  if (!docs.length) return "문서 없음.";
+  return docs.map((d, i) => {
+    const name = d.name || d.file_name || "이름 없음";
+    const size = d.file_size ? ` (${(d.file_size / 1024).toFixed(1)}KB)` : "";
+    return `${i + 1}. ${name}${size}\n   상태: ${d.status ?? "-"} · 타입: ${d.file_type ?? "-"}`;
+  }).join("\n");
+}
+
+async function documentUpload(args: Record<string, unknown>): Promise<string> {
+  const { uploadDocument } = await import("../../api/document.js");
+  const filePath = args.file_path as string;
+  if (!filePath) return "파일 경로가 필요합니다.";
+  const { existsSync } = await import("node:fs");
+  if (!existsSync(filePath)) return `파일을 찾을 수 없습니다: ${filePath}`;
+  const result = await uploadDocument(filePath, args.collection_id as string | undefined);
+  return `업로드 완료: ${JSON.stringify(result)}`;
+}
+
+async function graphRagQuery(args: Record<string, unknown>): Promise<string> {
+  const { queryGraphRAG } = await import("../../api/ontology.js");
+  const query = args.query as string;
+  if (!query) return "질의 내용이 필요합니다.";
+  const result = await queryGraphRAG(query, args.graph_id as string | undefined);
+  let output = `답변: ${result.answer ?? "없음"}`;
+  if (result.sources?.length) output += `\n\n출처: ${result.sources.join(", ")}`;
+  if (result.triples_used?.length) output += `\n트리플: ${result.triples_used.length}개 사용`;
+  return output;
+}
+
+async function graphStats(args: Record<string, unknown>): Promise<string> {
+  const { getGraphStats } = await import("../../api/ontology.js");
+  const stats = await getGraphStats(args.graph_id as string);
+  return `노드: ${stats.total_nodes ?? 0}개\n엣지: ${stats.total_edges ?? 0}개\n클래스: ${stats.total_classes ?? 0}개\n인스턴스: ${stats.total_instances ?? 0}개`;
 }
