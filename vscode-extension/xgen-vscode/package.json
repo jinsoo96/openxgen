@@ -1,0 +1,113 @@
+{
+  "name": "xgen-vscode",
+  "displayName": "XGEN",
+  "description": "XGEN 2.0 플랫폼을 VS Code에서 — 워크플로우 실행, 채팅, 서버 상태 대시보드",
+  "version": "0.1.0",
+  "publisher": "plateer",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:xgen.launch",
+    "onCommand:xgen.chat",
+    "onCommand:xgen.workflowRun",
+    "onCommand:xgen.openDashboard",
+    "onView:xgen.dashboard"
+  ],
+  "main": "./src/extension.js",
+  "files": [
+    "README.md",
+    "media/**",
+    "src/extension.js",
+    "src/presentation.js",
+    "src/state.js"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "xgen.launch",
+        "title": "XGEN: CLI 실행",
+        "category": "XGEN"
+      },
+      {
+        "command": "xgen.chat",
+        "title": "XGEN: 채팅 모드 실행",
+        "category": "XGEN"
+      },
+      {
+        "command": "xgen.workflowRun",
+        "title": "XGEN: 워크플로우 실행",
+        "category": "XGEN"
+      },
+      {
+        "command": "xgen.login",
+        "title": "XGEN: 로그인",
+        "category": "XGEN"
+      },
+      {
+        "command": "xgen.openDashboard",
+        "title": "XGEN: 대시보드 열기",
+        "category": "XGEN"
+      },
+      {
+        "command": "xgen.setServer",
+        "title": "XGEN: 서버 URL 설정",
+        "category": "XGEN"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xgen",
+          "title": "XGEN",
+          "icon": "media/xgen.svg"
+        }
+      ]
+    },
+    "views": {
+      "xgen": [
+        {
+          "id": "xgen.dashboard",
+          "name": "Dashboard",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "XGEN",
+      "properties": {
+        "xgen.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "XGEN 서버 URL (예: https://xgen.x2bee.com)"
+        },
+        "xgen.cliCommand": {
+          "type": "string",
+          "default": "xgen",
+          "description": "XGEN CLI 실행 명령어"
+        },
+        "xgen.terminalName": {
+          "type": "string",
+          "default": "XGEN",
+          "description": "통합 터미널 탭 이름"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test ./src/*.test.js",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "keywords": [
+    "xgen",
+    "workflow",
+    "ai",
+    "cli",
+    "plateer"
+  ],
+  "license": "UNLICENSED"
+}

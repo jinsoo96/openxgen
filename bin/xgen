@@ -1,0 +1,6 @@
+#!/usr/bin/env node
+import("../dist/index.js").catch((err) => {
+  console.error("XGEN CLI 로드 실패:", err.message);
+  console.error("빌드가 필요합니다: npm run build");
+  process.exit(1);
+});

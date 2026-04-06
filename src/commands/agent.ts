@@ -1,0 +1,212 @@
+/**
+ * xgen agent — OPEN XGEN AI 코딩 에이전트
+ */
+import { Command } from "commander";
+import chalk from "chalk";
+import { createInterface } from "node:readline";
+import { getDefaultProvider } from "../config/store.js";
+import { createLLMClient, streamChat, type Message } from "../agent/llm.js";
+import { getAllToolDefs, executeTool, getToolNames } from "../agent/tools/index.js";
+import { McpManager, loadMcpConfig } from "../mcp/client.js";
+import { printError } from "../utils/format.js";
+import type { ChatCompletionTool } from "openai/resources/chat/completions";
+
+const SYSTEM_PROMPT = `You are OPEN XGEN Agent, an AI coding assistant running in the user's terminal.
+You have access to tools for reading/writing files, executing commands, searching code, and running sandboxed code.
+You can also use MCP (Model Context Protocol) tools if available.
+Always respond in the same language as the user.
+When using tools, be concise about what you're doing.
+For file edits, show what you changed briefly.
+For sandbox_run, you can install npm/pip packages and run isolated code.`;
+
+let mcpManager: McpManager | null = null;
+
+export async function agentRepl(): Promise<void> {
+  const provider = getDefaultProvider();
+  if (!provider) {
+    printError("프로바이더가 설정되지 않았습니다.");
+    console.log(`  ${chalk.cyan("xgen provider add")}  프로바이더 추가`);
+    process.exit(1);
+  }
+
+  const client = createLLMClient(provider);
+
+  // 기본 도구
+  const builtinTools = getAllToolDefs();
+  const allTools: ChatCompletionTool[] = [...builtinTools];
+  const allToolNames = [...getToolNames()];
+
+  // MCP 로드
+  const mcpConfig = loadMcpConfig();
+  if (mcpConfig && Object.keys(mcpConfig.mcpServers).length > 0) {
+    mcpManager = new McpManager();
+    try {
+      await mcpManager.startAll(mcpConfig);
+      if (mcpManager.serverCount > 0) {
+        const mcpTools = mcpManager.getAllTools();
+        allTools.push(...mcpTools);
+        allToolNames.push(...mcpTools.map((t) => t.function.name));
+      }
+    } catch {
+      // MCP 실패해도 계속 진행
+    }
+  }
+
+  const messages: Message[] = [{ role: "system", content: SYSTEM_PROMPT }];
+
+  // 헤더
+  console.log(chalk.cyan.bold("\n  OPEN XGEN Agent"));
+  console.log(chalk.gray("  ─────────────────────────────"));
+  console.log(chalk.gray(`  프로바이더: ${provider.name} (${provider.model})`));
+  console.log(chalk.gray(`  도구: ${getToolNames().join(", ")}`));
+  if (mcpManager && mcpManager.serverCount > 0) {
+    console.log(chalk.gray(`  MCP: ${mcpManager.getServerNames().join(", ")} (${mcpManager.getAllTools().length}개 도구)`));
+  }
+  console.log(chalk.gray(`  종료: exit | Ctrl+C`));
+  console.log();
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (): Promise<string> =>
+    new Promise((resolve) => rl.question(chalk.green("❯ "), (a) => resolve(a.trim())));
+
+  // Ctrl+C 처리
+  process.on("SIGINT", () => {
+    console.log(chalk.gray("\n종료합니다."));
+    mcpManager?.stopAll();
+    rl.close();
+    process.exit(0);
+  });
+
+  while (true) {
+    const input = await ask();
+    if (!input) continue;
+
+    // 슬래시 커맨드
+    if (input === "exit" || input === "/exit") {
+      console.log(chalk.gray("종료합니다."));
+      mcpManager?.stopAll();
+      rl.close();
+      break;
+    }
+    if (input === "/clear") {
+      messages.length = 1;
+      console.log(chalk.gray("대화 초기화됨.\n"));
+      continue;
+    }
+    if (input === "/tools") {
+      console.log(chalk.bold("\n내장 도구:"), getToolNames().join(", "));
+      if (mcpManager && mcpManager.serverCount > 0) {
+        console.log(chalk.bold("MCP 도구:"), mcpManager.getAllTools().map((t) => t.function.name).join(", "));
+      }
+      console.log();
+      continue;
+    }
+    if (input === "/provider") {
+      console.log(chalk.gray(`현재: ${provider.name} (${provider.model})\n`));
+      continue;
+    }
+    if (input === "/mcp") {
+      if (mcpManager && mcpManager.serverCount > 0) {
+        console.log(chalk.bold("\nMCP 서버:"), mcpManager.getServerNames().join(", "));
+        console.log(chalk.gray("도구:"), mcpManager.getAllTools().map((t) => t.function.name).join(", "));
+      } else {
+        console.log(chalk.gray("MCP 서버 없음. .mcp.json을 프로젝트 루트에 추가하세요."));
+      }
+      console.log();
+      continue;
+    }
+
+    messages.push({ role: "user", content: input });
+
+    try {
+      await runAgentLoop(client, provider.model, messages, allTools);
+    } catch (err) {
+      console.log(chalk.red(`\n오류: ${(err as Error).message}\n`));
+    }
+  }
+}
+
+async function runAgentLoop(
+  client: ReturnType<typeof createLLMClient>,
+  model: string,
+  messages: Message[],
+  tools: ChatCompletionTool[]
+): Promise<void> {
+  const MAX_ITERATIONS = 20;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const result = await streamChat(client, model, messages, tools, (delta) => {
+      process.stdout.write(delta);
+    });
+
+    if (result.content) {
+      process.stdout.write("\n\n");
+    }
+
+    if (result.toolCalls.length === 0) {
+      if (result.content) {
+        messages.push({ role: "assistant", content: result.content });
+      }
+      return;
+    }
+
+    // assistant 메시지 추가
+    messages.push({
+      role: "assistant",
+      content: result.content || null,
+      tool_calls: result.toolCalls.map((tc) => ({
+        id: tc.id,
+        type: "function" as const,
+        function: { name: tc.name, arguments: tc.arguments },
+      })),
+    });
+
+    // 도구 실행
+    for (const tc of result.toolCalls) {
+      let args: Record<string, unknown>;
+      try {
+        args = JSON.parse(tc.arguments);
+      } catch {
+        args = {};
+      }
+
+      console.log(chalk.gray(`  ⚙ ${tc.name}(`), chalk.dim(summarizeArgs(args)), chalk.gray(")"));
+
+      let toolResult: string;
+      if (mcpManager?.isMcpTool(tc.name)) {
+        toolResult = await mcpManager.callTool(tc.name, args);
+      } else {
+        toolResult = await executeTool(tc.name, args);
+      }
+
+      const truncated =
+        toolResult.length > 4000 ? toolResult.slice(0, 4000) + "\n...(truncated)" : toolResult;
+
+      messages.push({
+        role: "tool",
+        tool_call_id: tc.id,
+        content: truncated,
+      });
+    }
+  }
+
+  console.log(chalk.yellow("\n최대 반복 횟수에 도달했습니다.\n"));
+}
+
+function summarizeArgs(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(args)) {
+    const s = String(v);
+    parts.push(`${k}: ${s.length > 40 ? s.slice(0, 40) + "..." : s}`);
+  }
+  return parts.join(", ");
+}
+
+export function registerAgentCommand(program: Command): void {
+  program
+    .command("agent")
+    .description("OPEN XGEN AI 코딩 에이전트")
+    .action(async () => {
+      await agentRepl();
+    });
+}
