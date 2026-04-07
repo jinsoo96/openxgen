@@ -413,9 +413,11 @@ export async function agentRepl(): Promise<void> {
     }
 
     if (input === "/dashboard" || input === "/dash") {
-      console.log(chalk.gray(`\n  대시보드는 별도로 실행하세요:`));
-      console.log(chalk.white(`  $ xgen dash\n`));
-      continue;
+      rl.close();
+      mcpManager?.stopAll();
+      const { spawnSync } = await import("node:child_process");
+      spawnSync(process.execPath, [process.argv[1], "dash"], { stdio: "inherit" });
+      return;
     }
 
     // ── AI 대화 ──
