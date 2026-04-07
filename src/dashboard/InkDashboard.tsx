@@ -306,6 +306,13 @@ function Dashboard() {
 }
 
 export async function startInkDashboard(): Promise<void> {
-  const { waitUntilExit } = render(<Dashboard />);
+  // readline이 pause 상태에서 Ink가 stdin을 다시 제어
+  if (process.stdin.isPaused?.()) {
+    process.stdin.resume();
+  }
+
+  const { waitUntilExit } = render(<Dashboard />, {
+    exitOnCtrlC: true,
+  });
   await waitUntilExit();
 }

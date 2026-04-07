@@ -414,11 +414,15 @@ export async function agentRepl(): Promise<void> {
 
     if (input === "/dashboard" || input === "/dash") {
       console.log(chalk.gray("  대시보드 열기...\n"));
+      rl.pause();
       mcpManager?.stopAll();
+      try {
+        const { startInkDashboard } = await import("../dashboard/InkDashboard.js");
+        await startInkDashboard();
+      } catch (err) {
+        console.log(chalk.red(`  대시보드 오류: ${(err as Error).message}\n`));
+      }
       rl.close();
-      if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
-      const { startInkDashboard } = await import("../dashboard/InkDashboard.js");
-      await startInkDashboard();
       return;
     }
 
@@ -510,11 +514,11 @@ async function connectServer(): Promise<void> {
   console.log(chalk.bold("\n  XGEN 서버 연결\n"));
 
   const presets = [
-    { id: "hq", name: "본사", url: "https://xgen.x2bee.com", email: "admin@plateer.com" },
-    { id: "jeju", name: "제주", url: "https://jeju-xgen.x2bee.com", email: "admin@plateer.com" },
-    { id: "lotte", name: "롯데몰", url: "https://lotteimall-xgen.x2bee.com" },
+    { id: "hq", name: "xgen.x2bee.com", url: "https://xgen.x2bee.com", email: "admin@plateer.com" },
+    { id: "jeju", name: "jeju-xgen.x2bee.com", url: "https://jeju-xgen.x2bee.com", email: "admin@plateer.com" },
+    { id: "lotte", name: "lotteimall-xgen.x2bee.com", url: "https://lotteimall-xgen.x2bee.com" },
   ];
-  presets.forEach((p, i) => console.log(`  ${chalk.cyan(`${i + 1}.`)} ${p.name} ${chalk.gray(p.url)}`));
+  presets.forEach((p, i) => console.log(`  ${chalk.cyan(`${i + 1}.`)} ${p.url}`));
   console.log(`  ${chalk.cyan("4.")} 직접 입력`);
   console.log();
 
