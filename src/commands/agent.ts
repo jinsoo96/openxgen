@@ -227,7 +227,29 @@ export async function agentRepl(): Promise<void> {
   }
   console.log(chalk.gray(`  cwd    ${process.cwd()}`));
   console.log();
-  console.log(chalk.gray(`  무엇이든 물어보세요. /help`));
+
+  // XGEN 연결 시 자동으로 상태 요약 표시
+  if (server && auth) {
+    try {
+      const [wfRes, colRes] = await Promise.allSettled([
+        import("../api/workflow.js").then((m) => m.getWorkflowListDetail()),
+        import("../api/document.js").then((m) => m.listCollections()),
+      ]);
+      const wfCount = wfRes.status === "fulfilled" ? wfRes.value.length : 0;
+      const colCount = colRes.status === "fulfilled" ? colRes.value.length : 0;
+      const deployed = wfRes.status === "fulfilled" ? wfRes.value.filter((w: Record<string, unknown>) => w.is_deployed).length : 0;
+      console.log(chalk.gray(`  ─────────────────────────────────`));
+      console.log(chalk.gray(`  워크플로우 ${chalk.white(String(wfCount))}개 (배포 ${deployed}) · 컬렉션 ${chalk.white(String(colCount))}개`));
+      console.log(chalk.gray(`  ─────────────────────────────────`));
+      console.log();
+      console.log(chalk.gray(`  "워크플로우 목록", "컬렉션", "6번 실행" 등 자유롭게 입력`));
+      console.log(chalk.gray(`  /dashboard 로 TUI 대시보드 · /help 전체 도움말`));
+    } catch {
+      console.log(chalk.gray(`  무엇이든 물어보세요. /help`));
+    }
+  } else {
+    console.log(chalk.gray(`  무엇이든 물어보세요. /help`));
+  }
   console.log();
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -473,7 +495,7 @@ async function runLoop(
         toolResult = await executeTool(tc.name, args);
       }
 
-      const truncated = toolResult.length > 4000 ? toolResult.slice(0, 4000) + "\n…(truncated)" : toolResult;
+      const truncated = toolResult.length > 8000 ? toolResult.slice(0, 8000) + "\n…(truncated)" : toolResult;
       // 도구 결과 미리보기 (1줄)
       const preview = toolResult.split("\n")[0].slice(0, 60);
       console.log(chalk.dim(`  └ ${preview}${toolResult.length > 60 ? "…" : ""}`));

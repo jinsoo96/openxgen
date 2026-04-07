@@ -186,12 +186,13 @@ async function workflowList(): Promise<string> {
   const { getWorkflowListDetail } = await import("../../api/workflow.js");
   const wfs = await getWorkflowListDetail();
   if (!wfs.length) return "워크플로우 없음.";
-  return wfs.map((w, i) => {
+  const header = `총 ${wfs.length}개 워크플로우:\n`;
+  const list = wfs.map((w, i) => {
     const deployed = (w as Record<string, unknown>).is_deployed;
-    const dk = (w as Record<string, unknown>).deploy_key;
-    const tag = deployed ? " [배포됨]" : "";
-    return `${i + 1}. ${w.workflow_name}${tag}\n   ID: ${w.workflow_id ?? w.id}\n   deploy_key: ${dk || "없음"}`;
+    const tag = deployed ? " ●" : "";
+    return `${i + 1}. ${w.workflow_name}${tag} | ${w.workflow_id ?? w.id}`;
   }).join("\n");
+  return header + list;
 }
 
 async function workflowRun(args: Record<string, unknown>): Promise<string> {
