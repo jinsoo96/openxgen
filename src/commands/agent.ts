@@ -186,8 +186,14 @@ export async function agentRepl(): Promise<void> {
   console.log();
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
+  let rlClosed = false;
+  rl.on("close", () => { rlClosed = true; });
+
   const askUser = (): Promise<string> =>
-    new Promise((resolve) => rl.question(chalk.cyan("  ❯ "), (a) => resolve(a.trim())));
+    new Promise((resolve) => {
+      if (rlClosed) { resolve("/exit"); return; }
+      rl.question(chalk.cyan("  ❯ "), (a) => resolve(a?.trim() ?? "/exit"));
+    });
 
   process.on("SIGINT", () => {
     console.log(chalk.gray("\n  👋\n"));
@@ -352,7 +358,17 @@ export async function agentRepl(): Promise<void> {
     try {
       await runLoop(client, provider.model, messages, allTools);
     } catch (err) {
-      console.log(chalk.red(`\n  오류: ${(err as Error).message}\n`));
+      const msg = (err as Error).message || String(err);
+      if (msg.includes("401") || msg.includes("API key") || msg.includes("Unauthorized")) {
+        console.log(chalk.red(`\n  ✗ API 키가 유효하지 않습니다. /provider 로 재설정하세요.\n`));
+      } else if (msg.includes("429") || msg.includes("rate limit")) {
+        console.log(chalk.yellow(`\n  ⚠ 요청 한도 초과. 잠시 후 다시 시도하세요.\n`));
+      } else if (msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND")) {
+        console.log(chalk.red(`\n  ✗ 프로바이더 서버에 연결할 수 없습니다. URL/네트워크 확인.\n`));
+      } else {
+        console.log(chalk.red(`\n  오류: ${msg}\n`));
+      }
+      messages.pop(); // 실패한 user 메시지 제거 (재시도 가능)
     }
   }
 }

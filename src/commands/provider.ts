@@ -275,8 +275,32 @@ export async function guidedProviderSetup(): Promise<ProviderConfig | null> {
     });
     console.log(chalk.green("  ✓ 연결 성공!\n"));
   } catch (err) {
-    console.log(chalk.yellow(`  ⚠ 테스트 실패: ${(err as Error).message}`));
-    console.log(chalk.gray("  설정은 저장됩니다.\n"));
+    const msg = (err as Error).message || "";
+    if (msg.includes("401") || msg.includes("API key") || msg.includes("Unauthorized")) {
+      console.log(chalk.red(`  ✗ API 키가 유효하지 않습니다.`));
+      const retry = await ask(chalk.white("  다시 입력할까요? (Y/n): "));
+      if (retry.toLowerCase() !== "n") {
+        const newKey = await ask(chalk.white("  API Key: "));
+        if (newKey) {
+          provider.apiKey = newKey;
+          try {
+            const c2 = new OpenAI({ apiKey: newKey, baseURL: baseUrl });
+            await c2.chat.completions.create({ model, messages: [{ role: "user", content: "Hi" }], max_tokens: 5 });
+            console.log(chalk.green("  ✓ 연결 성공!\n"));
+          } catch {
+            console.log(chalk.yellow("  ⚠ 여전히 실패. 설정은 저장됩니다.\n"));
+          }
+        }
+      } else {
+        console.log(chalk.gray("  설정은 저장됩니다.\n"));
+      }
+    } else if (msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND")) {
+      console.log(chalk.yellow(`  ⚠ 서버에 연결할 수 없습니다. URL을 확인하세요.`));
+      console.log(chalk.gray("  설정은 저장됩니다.\n"));
+    } else {
+      console.log(chalk.yellow(`  ⚠ 테스트 실패: ${msg}`));
+      console.log(chalk.gray("  설정은 저장됩니다.\n"));
+    }
   }
 
   addProvider(provider);
