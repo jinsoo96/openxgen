@@ -79,20 +79,41 @@ export async function executeWorkflowStream(
 }
 
 /**
- * 워크플로우 실행 (non-stream, deploy 엔드포인트)
- * K3s Istio 환경에서 based_id/stream은 Next.js로 라우팅되어 CLI 접근 불가
- * deploy/result 엔드포인트 사용
+ * 워크플로우 실행 (JSON 응답)
+ * deploy/stream 엔드포인트는 배포 여부 무관하게 workflow_id로 실행 가능
+ * response_format=json 으로 non-streaming 응답
  */
 export async function executeWorkflow(
-  request: WorkflowExecuteRequest & { deploy_key?: string }
+  request: WorkflowExecuteRequest & { deploy_key?: string; user_id?: number }
 ): Promise<unknown> {
   const client = getClient();
-  // deploy_key가 있으면 deploy 엔드포인트, 없으면 based_id
-  if (request.deploy_key) {
-    const res = await client.post("/api/workflow/execute/deploy/result", request);
-    return res.data;
-  }
-  const res = await client.post("/api/workflow/execute/based_id", request);
+  const body = {
+    ...request,
+    user_id: request.user_id ?? 1,
+    response_format: "json",
+  };
+  const res = await client.post("/api/workflow/execute/deploy/stream", body);
+  return res.data;
+}
+
+/**
+ * 워크플로우 SSE 스트리밍 실행
+ * deploy/stream 엔드포인트 + response_format=stream
+ * 배포 여부 무관하게 모든 워크플로우 실행 가능
+ */
+export async function executeWorkflowSSE(
+  request: WorkflowExecuteRequest & { deploy_key?: string; user_id?: number }
+): Promise<NodeJS.ReadableStream> {
+  const client = getClient();
+  const body = {
+    ...request,
+    user_id: request.user_id ?? 1,
+    response_format: "stream",
+  };
+  const res = await client.post("/api/workflow/execute/deploy/stream", body, {
+    responseType: "stream",
+    headers: { Accept: "text/event-stream" },
+  });
   return res.data;
 }
 

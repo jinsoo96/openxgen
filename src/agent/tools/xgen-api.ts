@@ -19,14 +19,13 @@ export const definitions: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "xgen_workflow_run",
-      description: "XGEN 워크플로우를 실행합니다. 배포된 워크플로우만 실행 가능.",
+      description: "XGEN 워크플로우를 실행합니다. 배포 여부와 관계없이 모든 워크플로우 실행 가능.",
       parameters: {
         type: "object",
         properties: {
           workflow_id: { type: "string", description: "워크플로우 ID" },
           workflow_name: { type: "string", description: "워크플로우 이름" },
           input_data: { type: "string", description: "입력 메시지" },
-          deploy_key: { type: "string", description: "배포 키 (배포된 워크플로우)" },
         },
         required: ["workflow_id", "workflow_name", "input_data"],
       },
@@ -198,15 +197,18 @@ async function workflowList(): Promise<string> {
 async function workflowRun(args: Record<string, unknown>): Promise<string> {
   const { executeWorkflow } = await import("../../api/workflow.js");
   const { randomUUID } = await import("node:crypto");
+  const { getAuth } = await import("../../config/store.js");
+  const auth = getAuth();
   const result = await executeWorkflow({
     workflow_id: args.workflow_id as string,
     workflow_name: args.workflow_name as string,
     input_data: args.input_data as string,
     interaction_id: `cli_${randomUUID().slice(0, 8)}`,
-    deploy_key: args.deploy_key as string | undefined,
+    user_id: auth?.userId ? parseInt(auth.userId) : 1,
   }) as Record<string, unknown>;
   if (result.content) return String(result.content);
   if (result.success === false) return `오류: ${result.error ?? result.message}`;
+  if (result.message) return String(result.message);
   return JSON.stringify(result, null, 2).slice(0, 2000);
 }
 
