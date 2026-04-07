@@ -19,7 +19,7 @@ import { registerDocCommand } from "./commands/doc.js";
 import { registerOntologyCommand } from "./commands/ontology.js";
 import { getAuth, getServer, getDefaultProvider } from "./config/store.js";
 
-const VERSION = "2.0.0";
+const VERSION = "2.2.0";
 
 const LOGO = chalk.cyan(`
    ██████  ██████  ███████ ███    ██
@@ -76,6 +76,16 @@ registerProviderCommand(program);
 registerAgentCommand(program);
 registerDocCommand(program);
 registerOntologyCommand(program);
+
+// 대시보드 커맨드 (별도 프로세스로 실행 — stdin 충돌 방지)
+program
+  .command("dash")
+  .alias("dashboard")
+  .description("XGEN TUI 대시보드")
+  .action(async () => {
+    const { startInkDashboard } = await import("./dashboard/InkDashboard.js");
+    await startInkDashboard();
+  });
 
 // 인자 없이 실행: 바로 AI 채팅 (Claude Code 스타일)
 if (process.argv.length <= 2) {

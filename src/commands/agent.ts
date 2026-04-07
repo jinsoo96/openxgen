@@ -413,17 +413,9 @@ export async function agentRepl(): Promise<void> {
     }
 
     if (input === "/dashboard" || input === "/dash") {
-      console.log(chalk.gray("  대시보드 열기...\n"));
-      rl.pause();
-      mcpManager?.stopAll();
-      try {
-        const { startInkDashboard } = await import("../dashboard/InkDashboard.js");
-        await startInkDashboard();
-      } catch (err) {
-        console.log(chalk.red(`  대시보드 오류: ${(err as Error).message}\n`));
-      }
-      rl.close();
-      return;
+      console.log(chalk.gray(`\n  대시보드는 별도로 실행하세요:`));
+      console.log(chalk.white(`  $ xgen dash\n`));
+      continue;
     }
 
     // ── AI 대화 ──
