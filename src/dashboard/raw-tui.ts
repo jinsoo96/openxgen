@@ -5,6 +5,7 @@
  * 아래 전체: 채팅 + 결과
  */
 import { getServer, getAuth, getDefaultProvider } from "../config/store.js";
+import type { ChatCompletionTool, ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 type Tab = "workflows" | "collections" | "nodes" | "prompts" | "tools" | "mcp";
 interface ListItem { label: string; sub?: string; }
@@ -256,14 +257,149 @@ export async function startRawTui(): Promise<void> {
     process.stdout.write(dim(` ${statusMsg}`.slice(0, cols)));
   }
 
+  // ── 에이전트 상태 ──
+  let agentMessages: ChatCompletionMessageParam[] = [];
+  let agentTools: ChatCompletionTool[] = [];
+  let agentReady = false;
+
+  async function initAgent() {
+    if (agentReady) return;
+    try {
+      const p = getDefaultProvider();
+      if (!p) return;
+      const { getAllToolDefs } = await import("../agent/tools/index.js");
+      const { definition: tsDef } = await import("../agent/tools/tool-search.js");
+      agentTools = [...getAllToolDefs(), tsDef];
+
+      const ctx = [
+        `You are OPEN XGEN sandbox agent. You have tools to explore and test.`,
+        `Act immediately. No menus. Korean if user speaks Korean.`,
+        server ? `XGEN: ${server} (connected). Use tool_search to load XGEN tools.` : `XGEN: not connected.`,
+        `Current tab: ${tab}. Selected: ${getItems()[sel]?.label ?? "none"}.`,
+      ].join("\n");
+      agentMessages = [{ role: "system", content: ctx }];
+      agentReady = true;
+    } catch { /* 프로바이더 없으면 에이전트 비활성 */ }
+  }
+
   // ── 액션 ──
   function addChat(line: string) {
     chatLines.push(line);
     if (chatLines.length > 200) chatLines = chatLines.slice(-100);
   }
 
-  async function runWorkflow(wf: { name: string; id: string }, input: string) {
+  /** 채팅 입력 → 에이전트 루프 (LLM + 도구 호출) */
+  async function runAgentChat(input: string) {
     addChat(`${cyan("❯")} ${input}`);
+    sandbox = [yellow("에이전트 실행 중...")];
+    render();
+
+    await initAgent();
+    const p = getDefaultProvider();
+    if (!p || !agentReady) {
+      // 프로바이더 없으면 워크플로우 직접 실행 폴백
+      if (tab === "workflows" && workflows[sel]) {
+        await runWorkflowDirect(workflows[sel], input);
+      } else {
+        addChat(dim("  프로바이더 미설정. xgen provider add로 추가하세요."));
+        render();
+      }
+      return;
+    }
+
+    try {
+      const { createLLMClient, streamChat } = await import("../agent/llm.js");
+      const { execute: xgenExec, isXgenTool } = await import("../agent/tools/xgen-api.js");
+      const { execute: toolSearchExec, getNewlyLoadedTools } = await import("../agent/tools/tool-search.js");
+      const { executeTool } = await import("../agent/tools/index.js");
+      const { runPreHooks, runPostHooks } = await import("../agent/hooks.js");
+
+      const client = createLLMClient(p);
+
+      // 현재 컨텍스트 주입
+      agentMessages.push({ role: "user", content: input });
+
+      for (let turn = 0; turn < 10; turn++) {
+        const result = await streamChat(client, p.model, agentMessages, agentTools, (delta) => {
+          // 스트리밍 델타를 채팅에 추가
+          const lastLine = chatLines[chatLines.length - 1] ?? "";
+          if (lastLine.startsWith("  ") && !lastLine.includes("✓") && !lastLine.includes("✗")) {
+            chatLines[chatLines.length - 1] = lastLine + delta;
+          } else {
+            addChat(`  ${delta}`);
+          }
+          render();
+        });
+
+        if (result.toolCalls.length === 0) {
+          if (result.content) {
+            agentMessages.push({ role: "assistant", content: result.content });
+            sandbox = [bold("에이전트 응답"), "", ...result.content.split("\n").slice(0, 15)];
+          }
+          break;
+        }
+
+        // 도구 호출 처리
+        agentMessages.push({
+          role: "assistant", content: result.content || null,
+          tool_calls: result.toolCalls.map(tc => ({ id: tc.id, type: "function" as const, function: { name: tc.name, arguments: tc.arguments } })),
+        } as any);
+
+        const sandboxResults: string[] = [bold("도구 실행")];
+
+        for (const tc of result.toolCalls) {
+          let args: Record<string, unknown>;
+          try { args = JSON.parse(tc.arguments); } catch { args = {}; }
+
+          // PreHook
+          const pre = runPreHooks(tc.name, args);
+          if (!pre.proceed) {
+            addChat(red(`  ✗ ${tc.name} 차단: ${pre.message}`));
+            agentMessages.push({ role: "tool", tool_call_id: tc.id, content: pre.message ?? "차단" });
+            continue;
+          }
+
+          addChat(dim(`  ┌ ${tc.name}`));
+          sandboxResults.push("", dim(`▸ ${tc.name}`));
+
+          let toolResult: string;
+          if (tc.name === "tool_search") {
+            toolResult = await toolSearchExec(args);
+            const newTools = getNewlyLoadedTools(args.query as string);
+            for (const nt of newTools) {
+              if (!agentTools.some(t => t.function.name === nt.function.name)) agentTools.push(nt);
+            }
+          } else if (isXgenTool(tc.name)) {
+            toolResult = await xgenExec(tc.name, args);
+          } else {
+            toolResult = await executeTool(tc.name, args);
+          }
+
+          // PostHook
+          toolResult = runPostHooks(tc.name, toolResult);
+
+          const preview = toolResult.split("\n")[0].slice(0, 50);
+          addChat(dim(`  └ ${preview}${toolResult.length > 50 ? "…" : ""}`));
+          sandboxResults.push(...toolResult.split("\n").slice(0, 8));
+
+          agentMessages.push({ role: "tool", tool_call_id: tc.id, content: toolResult });
+        }
+
+        sandbox = sandboxResults;
+        render();
+      }
+    } catch (err: any) {
+      addChat(red(`  에이전트 오류: ${err.message}`));
+      sandbox = [red(`오류: ${err.message}`)];
+    }
+
+    addChat("");
+    statusMsg = getHint();
+    render();
+  }
+
+  /** 워크플로우 직접 실행 (에이전트 없이 폴백) */
+  async function runWorkflowDirect(wf: { name: string; id: string }, input: string) {
     addChat(yellow(`  ${wf.name} 실행 중...`));
     sandbox = [bold(wf.name), "", yellow("실행 중...")];
     render();
@@ -351,12 +487,9 @@ export async function startRawTui(): Promise<void> {
       if (s === "\x1b") { inputActive = false; inputBuf = ""; render(); return; }
       if (s === "\r" || s === "\n") {
         const val = inputBuf.trim(); inputActive = false; inputBuf = "";
-        if (val && tab === "workflows" && workflows[sel]) {
-          runWorkflow(workflows[sel], val);
-        } else if (val) {
-          addChat(`${cyan("❯")} ${val}`);
-          addChat(dim("  워크플로우를 선택한 후 질문을 입력하세요."));
-          render();
+        if (val) {
+          // 모든 입력을 에이전트 루프로 — LLM이 판단해서 도구 호출
+          runAgentChat(val);
         } else { render(); }
         return;
       }

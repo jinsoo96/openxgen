@@ -23,3 +23,6 @@
 
 ## 대시보드
 → [docs/dashboard.md](dashboard.md) — 3분할 레이아웃, 채팅→결과 구조, 키 동작
+
+## 샌드박스 검증 환경
+→ [docs/sandbox.md](sandbox.md) — LLM 실행 환경, 도구 테스트, Progressive Disclosure in Sandbox
