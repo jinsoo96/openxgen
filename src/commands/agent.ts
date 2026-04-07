@@ -139,11 +139,63 @@ function showUsage(usage: TokenUsage | null): void {
 }
 
 export async function agentRepl(): Promise<void> {
-  // 프로바이더 확인/설정
+  // ── 로고 ──
+  console.log(chalk.cyan(`
+   ██████  ██████  ███████ ███    ██
+  ██    ██ ██   ██ ██      ████   ██
+  ██    ██ ██████  █████   ██ ██  ██
+  ██    ██ ██      ██      ██  ██ ██
+   ██████  ██      ███████ ██   ████`) +
+  chalk.white.bold(`
+  ██   ██  ██████  ███████ ███    ██
+   ██ ██  ██       ██      ████   ██
+    ███   ██   ███ █████   ██ ██  ██
+   ██ ██  ██    ██ ██      ██  ██ ██
+  ██   ██  ██████  ███████ ██   ████`));
+  console.log();
+
+  // ── 1단계: 프로바이더 ──
   let provider = getDefaultProvider();
   if (!provider) {
     provider = await guidedProviderSetup();
     if (!provider) process.exit(1);
+  }
+
+  // ── 2단계: XGEN 서버 연결 (미연결이면 자동 가이드) ──
+  let server = getServer();
+  let auth = getAuth();
+
+  if (!server || !auth) {
+    console.log(chalk.yellow("  XGEN 서버에 연결되지 않았습니다."));
+    console.log(chalk.gray("  연결하면 워크플로우, 컬렉션, 온톨로지 등 XGEN 기능을 사용할 수 있습니다.\n"));
+
+    const { ask: askOnce } = await import("../utils/ui.js");
+    const doConnect = await askOnce(chalk.white("  XGEN 서버에 연결할까요? (Y/n): "));
+    if (doConnect.toLowerCase() !== "n") {
+      await connectServer();
+      server = getServer();
+      auth = getAuth();
+    } else {
+      console.log(chalk.gray("  나중에 /connect 로 연결할 수 있습니다.\n"));
+    }
+  } else {
+    // 저장된 인증이 있으면 유효성 확인
+    try {
+      const { apiValidate } = await import("../api/auth.js");
+      const valid = await apiValidate(auth.accessToken);
+      if (!valid.valid) {
+        // 토큰 갱신 시도
+        const { apiRefresh } = await import("../api/auth.js");
+        const refreshed = await apiRefresh(auth.refreshToken);
+        if (refreshed.success && refreshed.access_token) {
+          const { setAuth } = await import("../config/store.js");
+          setAuth({ ...auth, accessToken: refreshed.access_token });
+          auth = getAuth();
+        }
+      }
+    } catch {
+      // 검증 실패해도 계속 (오프라인일 수 있음)
+    }
   }
 
   const client = createLLMClient(provider);
@@ -165,28 +217,13 @@ export async function agentRepl(): Promise<void> {
   const messages: Message[] = [{ role: "system", content: buildSystemPrompt() }];
 
   // ── 헤더 ──
-  const server = getServer();
-  const auth = getAuth();
   const env = getActiveEnvironment();
 
-  const W = Math.min(process.stdout.columns || 60, 60);
-
-  console.log(chalk.cyan(`
-   ██████  ██████  ███████ ███    ██
-  ██    ██ ██   ██ ██      ████   ██
-  ██    ██ ██████  █████   ██ ██  ██
-  ██    ██ ██      ██      ██  ██ ██
-   ██████  ██      ███████ ██   ████`) +
-  chalk.white.bold(`
-  ██   ██  ██████  ███████ ███    ██
-   ██ ██  ██       ██      ████   ██
-    ███   ██   ███ █████   ██ ██  ██
-   ██ ██  ██    ██ ██      ██  ██ ██
-  ██   ██  ██████  ███████ ██   ████`));
-  console.log();
   console.log(chalk.gray(`  model  ${provider.model}`));
   if (server && auth) {
     console.log(chalk.gray(`  xgen   ${chalk.green("●")} ${auth.username}@${(env?.name ?? server).replace("https://", "")}`));
+  } else {
+    console.log(chalk.gray(`  xgen   ${chalk.red("○")} 미연결`));
   }
   console.log(chalk.gray(`  cwd    ${process.cwd()}`));
   console.log();
