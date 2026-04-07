@@ -19,7 +19,7 @@ import { registerDocCommand } from "./commands/doc.js";
 import { registerOntologyCommand } from "./commands/ontology.js";
 import { getAuth, getServer, getDefaultProvider } from "./config/store.js";
 
-const VERSION = "2.4.0";
+const VERSION = "2.5.0";
 
 const LOGO = chalk.cyan(`
    ██████  ██████  ███████ ███    ██

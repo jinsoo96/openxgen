@@ -14,6 +14,8 @@ import { getAllToolDefs, executeTool, getToolNames } from "../agent/tools/index.
 import { execute as xgenExecute, isXgenTool } from "../agent/tools/xgen-api.js";
 import { definition as toolSearchDef, execute as toolSearchExecute, getNewlyLoadedTools, getToolIndexSummary, getLoadedToolDefs, resetLoadedTools } from "../agent/tools/tool-search.js";
 import { McpManager, loadMcpConfig } from "../mcp/client.js";
+import { runPreHooks, runPostHooks } from "../agent/hooks.js";
+import { compactMessages, shouldInjectReminder, createReminder } from "../agent/context.js";
 import { guidedProviderSetup } from "./provider.js";
 import { box, ask, welcome } from "../utils/ui.js";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
@@ -444,6 +446,19 @@ async function runLoop(
   tools: ChatCompletionTool[]
 ): Promise<void> {
   for (let i = 0; i < 20; i++) {
+    // 컨텍스트 압축 체크
+    const compacted = compactMessages(messages);
+    if (compacted.length < messages.length) {
+      messages.length = 0;
+      messages.push(...compacted);
+    }
+
+    // System Reminder 주입
+    if (shouldInjectReminder(i)) {
+      const loadedNames = getLoadedToolDefs().map(t => t.function.name);
+      messages.push(createReminder(getServer() ?? undefined, loadedNames));
+    }
+
     let first = true;
     const result = await streamChat(client, model, messages, tools, (delta) => {
       if (first) { process.stdout.write(chalk.green("\n  ") + ""); first = false; }
@@ -472,7 +487,15 @@ async function runLoop(
       let args: Record<string, unknown>;
       try { args = JSON.parse(tc.arguments); } catch { args = {}; }
 
-      const shortArgs = Object.entries(args).map(([k, v]) => {
+      // PreToolUse Hook
+      const preResult = runPreHooks(tc.name, args);
+      if (!preResult.proceed) {
+        console.log(chalk.red(`  ✗ ${tc.name} 차단: ${preResult.message}`));
+        messages.push({ role: "tool", tool_call_id: tc.id, content: preResult.message ?? "차단됨" });
+        continue;
+      }
+
+      const shortArgs = Object.entries(args).map(([, v]) => {
         const s = String(v);
         return s.length > 40 ? s.slice(0, 40) + "…" : s;
       }).join(", ");
@@ -481,7 +504,6 @@ async function runLoop(
       let toolResult: string;
       if (tc.name === "tool_search") {
         toolResult = await toolSearchExecute(args);
-        // 새로 로드된 도구를 현재 세션 tools에 추가
         const newTools = getNewlyLoadedTools(args.query as string);
         for (const nt of newTools) {
           if (!tools.some(t => t.function.name === nt.function.name)) {
@@ -496,11 +518,12 @@ async function runLoop(
         toolResult = await executeTool(tc.name, args);
       }
 
-      const truncated = toolResult.length > 8000 ? toolResult.slice(0, 8000) + "\n…(truncated)" : toolResult;
-      // 도구 결과 미리보기 (1줄)
+      // PostToolUse Hook — 자동 truncate/요약
+      toolResult = runPostHooks(tc.name, toolResult);
+
       const preview = toolResult.split("\n")[0].slice(0, 60);
       console.log(chalk.dim(`  └ ${preview}${toolResult.length > 60 ? "…" : ""}`));
-      messages.push({ role: "tool", tool_call_id: tc.id, content: truncated });
+      messages.push({ role: "tool", tool_call_id: tc.id, content: toolResult });
     }
   }
   console.log(chalk.yellow("\n  최대 반복 횟수 도달.\n"));
