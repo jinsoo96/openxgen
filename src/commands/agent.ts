@@ -51,24 +51,22 @@ EXAMPLES OF GOOD RESPONSES:
   if (server && auth) {
     prompt += `
 
-XGEN CONNECTED: ${server} as ${auth.username} (${env?.name ?? "default"})
+XGEN CONNECTED: ${server} as ${auth.username}
 
-XGEN CAPABILITIES (use these tools naturally):
-- xgen_workflow_list: 워크플로우 전체 목록. 배포 상태, ID 포함.
-- xgen_workflow_run: 워크플로우 실행. 배포 여부 무관하게 모든 워크플로우 실행 가능. 사용자가 번호나 이름 말하면 이전 목록에서 찾아서 바로 실행.
-- xgen_workflow_info: 워크플로우 상세 (노드, 엣지 수 등).
-- xgen_collection_list: 문서 컬렉션 목록 (RAG 지식베이스). 문서 수, 청크 수 포함.
-- xgen_document_list: 특정 컬렉션의 문서 목록 조회.
-- xgen_document_upload: 파일을 컬렉션에 업로드.
-- xgen_graph_rag_query: GraphRAG 온톨로지 질의. 지식그래프 기반 답변.
-- xgen_graph_stats: 그래프 통계 (노드, 엣지, 클래스, 인스턴스 수).
-- xgen_execution_history: 특정 워크플로우 실행 이력.
-- xgen_server_status: 서버 연결 상태.
+You have full access to XGEN platform. Available tools:
 
-WORKFLOW EXECUTION NOTES:
-- 모든 워크플로우 실행 가능 (배포/비배포 무관). deploy_key 불필요.
-- 실행 시 input_data에 사용자 메시지를 넣음.
-- 실행 결과의 content가 응답.`;
+WORKFLOW: xgen_workflow_list, xgen_workflow_run (모든 워크플로우 실행 가능, 배포 무관), xgen_workflow_info, xgen_execution_history, xgen_workflow_performance, xgen_workflow_store, xgen_workflow_generate (자연어로 워크플로우 자동 생성)
+DOCUMENTS: xgen_collection_list, xgen_document_list, xgen_document_upload
+NODES: xgen_node_list, xgen_node_search, xgen_node_categories
+PROMPTS: xgen_prompt_list
+TOOLS: xgen_tool_store, xgen_user_tools
+SCHEDULE: xgen_schedule_list
+TRACE: xgen_trace_list, xgen_interaction_list
+MCP: xgen_mcp_sessions
+ONTOLOGY: xgen_graph_rag_query, xgen_graph_stats
+SERVER: xgen_server_status
+
+When user says a number → find it from previous list. "실행" → execute immediately.`;
   } else {
     prompt += `\nXGEN: Not connected. User can run /connect to connect.`;
   }
