@@ -19,7 +19,7 @@ import { registerDocCommand } from "./commands/doc.js";
 import { registerOntologyCommand } from "./commands/ontology.js";
 import { getAuth, getServer, getDefaultProvider } from "./config/store.js";
 
-const VERSION = "2.3.0";
+const VERSION = "2.4.0";
 
 const LOGO = chalk.cyan(`
    ██████  ██████  ███████ ███    ██
@@ -59,11 +59,17 @@ ${chalk.bold("AI 에이전트:")}
   ${chalk.cyan("xgen provider add")}               프로바이더 추가
 
 ${chalk.bold("XGEN 플랫폼:")}
+  ${chalk.cyan("xgen dash")}                       TUI 대시보드 (조회/테스트/생성)
   ${chalk.cyan("xgen chat")}                       워크플로우 대화
   ${chalk.cyan("xgen wf ls")}                      워크플로우 목록
   ${chalk.cyan("xgen wf run")} <id> "질문"         워크플로우 실행
   ${chalk.cyan("xgen doc ls")}                     문서 목록
   ${chalk.cyan("xgen ont query")} "질문"           온톨로지 질의
+
+${chalk.bold("대시보드 (xgen dash):")}
+  ${chalk.gray("↑↓")} 이동  ${chalk.gray("Enter")} 상세/실행  ${chalk.gray("1-6")} 탭전환  ${chalk.gray("r")} 새로고침  ${chalk.gray("q")} 종료
+  ${chalk.gray("c")} 생성  ${chalk.gray("e")} 수정  ${chalk.gray("d")} 삭제  ${chalk.gray("t")} 테스트  ${chalk.gray("u")} 스토어등록  ${chalk.gray("v")} 버전
+  탭: 워크플로우 컬렉션 노드 프롬프트 도구 MCP
 `
   );
 
@@ -77,12 +83,17 @@ registerAgentCommand(program);
 registerDocCommand(program);
 registerOntologyCommand(program);
 
-// 대시보드 커맨드 (별도 프로세스로 실행 — stdin 충돌 방지)
+// 대시보드 커맨드
 program
   .command("dash")
   .alias("dashboard")
   .description("XGEN TUI 대시보드")
   .action(async () => {
+    // Commander가 stdin 리스너를 등록했을 수 있으므로 전부 해제
+    process.stdin.removeAllListeners();
+    process.stdin.pause();
+    // stdin 버퍼 비우기 — 명령줄 Enter 잔여 입력 제거
+    await new Promise(r => setTimeout(r, 50));
     const { startRawTui } = await import("./dashboard/raw-tui.js");
     await startRawTui();
   });
