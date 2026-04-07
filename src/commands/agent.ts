@@ -170,11 +170,19 @@ export async function agentRepl(): Promise<void> {
   const env = getActiveEnvironment();
 
   const W = Math.min(process.stdout.columns || 60, 60);
-  const line = chalk.cyan("─".repeat(W));
 
-  console.log(`\n${line}`);
-  console.log(chalk.cyan.bold("  ✦ OPEN XGEN"));
-  console.log(line);
+  console.log(chalk.cyan(`
+   ██████  ██████  ███████ ███    ██
+  ██    ██ ██   ██ ██      ████   ██
+  ██    ██ ██████  █████   ██ ██  ██
+  ██    ██ ██      ██      ██  ██ ██
+   ██████  ██      ███████ ██   ████`) +
+  chalk.white.bold(`
+  ██   ██  ██████  ███████ ███    ██
+   ██ ██  ██       ██      ████   ██
+    ███   ██   ███ █████   ██ ██  ██
+   ██ ██  ██    ██ ██      ██  ██ ██
+  ██   ██  ██████  ███████ ██   ████`));
   console.log();
   console.log(chalk.gray(`  model  ${provider.model}`));
   if (server && auth) {
