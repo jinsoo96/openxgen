@@ -1,165 +1,111 @@
 /**
- * OPEN XGEN TUI 대시보드 — blessed 기반 화면 분할
+ * OPEN XGEN TUI 대시보드 — 모노톤
  *
- * ┌─────────────────────┬──────────────────────┐
- * │  워크플로우 목록      │  상세 정보 / 실행     │
- * │  (화살표 선택)       │                      │
- * │                     │                      │
- * ├─────────────────────┼──────────────────────┤
- * │  컬렉션 / 문서       │  AI 채팅             │
- * │                     │  (입력 + 응답)        │
- * │                     │                      │
- * └─────────────────────┴──────────────────────┘
- * [Tab: 패널 전환] [Enter: 선택/실행] [q: 종료]
+ * ┌──────────────────────────┬───────────────────────────┐
+ * │  [워크플로우] [컬렉션]    │  상세 / 로그              │
+ * │                          │                           │
+ * │  목록                    │                           │
+ * │                          │                           │
+ * ├──────────────────────────┤                           │
+ * │  ❯                      │                           │
+ * └──────────────────────────┴───────────────────────────┘
  */
 import blessed from "blessed";
-import { getServer, getAuth, getDefaultProvider, getActiveEnvironment } from "../config/store.js";
+import { getServer, getAuth, getDefaultProvider } from "../config/store.js";
 
-// 타입
-interface WfItem {
-  name: string;
-  id: string;
-  deployed: boolean;
-  deployKey?: string;
-  nodeCount?: number;
-}
-
-interface ColItem {
-  name: string;
-  docs: number;
-  chunks: number;
-  shared: boolean;
-  group?: string;
-}
+interface WfItem { name: string; id: string; deployed: boolean; }
+interface ColItem { name: string; id?: number; docs: number; chunks: number; shared: boolean; group?: string; model?: string; }
 
 export async function startTui(): Promise<void> {
-  const screen = blessed.screen({
-    smartCSR: true,
-    title: "OPEN XGEN",
-    fullUnicode: true,
-  });
+  const screen = blessed.screen({ smartCSR: true, title: "OPEN XGEN", fullUnicode: true });
 
   const provider = getDefaultProvider();
   const server = getServer();
   const auth = getAuth();
-  const env = getActiveEnvironment();
+  const serverDisplay = auth && server
+    ? `${auth.username}@${server.replace("https://", "").replace("http://", "")}`
+    : "미연결";
+
+  type TabName = "workflows" | "collections";
+  let activeTab: TabName = "workflows";
 
   // ── 헤더 ──
   const header = blessed.box({
     top: 0, left: 0, width: "100%", height: 3,
-    content: `{center}{bold}OPEN XGEN{/bold}  ${provider?.model ?? "AI 미설정"} · ${auth?.username ?? "미연결"}@${env?.name ?? server?.replace("https://", "") ?? ""}{/center}`,
     tags: true,
-    style: { fg: "white", bg: "blue" },
+    style: { fg: "white", bg: "black" },
   });
 
-  // ── 왼쪽 상단: 워크플로우 ──
-  const wfPanel = blessed.list({
-    top: 3, left: 0, width: "50%", height: "50%-2",
-    label: " 워크플로우 ",
+  function renderHeader(): void {
+    const wf = activeTab === "workflows" ? "{bold}{underline}워크플로우{/underline}{/bold}" : "{gray-fg}워크플로우{/gray-fg}";
+    const col = activeTab === "collections" ? "{bold}{underline}컬렉션{/underline}{/bold}" : "{gray-fg}컬렉션{/gray-fg}";
+    header.setContent(` OPEN XGEN  {gray-fg}${provider?.model ?? ""}{/gray-fg}  ${serverDisplay}  │  [1]${wf}  [2]${col}`);
+    screen.render();
+  }
+
+  // ── 왼쪽: 목록 ──
+  const listPanel = blessed.list({
+    top: 3, left: 0, width: "50%", height: "100%-9",
     border: { type: "line" },
     style: {
-      border: { fg: "cyan" },
-      selected: { fg: "black", bg: "cyan" },
+      border: { fg: "gray" },
+      selected: { fg: "black", bg: "white" },
       item: { fg: "white" },
-      label: { fg: "cyan", bold: true },
+      label: { fg: "white", bold: true },
     },
-    keys: true,
-    vi: true,
-    mouse: true,
-    scrollbar: { ch: "│", style: { fg: "cyan" } },
+    keys: true, vi: true, mouse: true,
+    scrollbar: { ch: "│", style: { fg: "gray" } },
     tags: true,
   });
 
-  // ── 오른쪽 상단: 상세/실행 결과 ──
-  const detailPanel = blessed.box({
-    top: 3, left: "50%", width: "50%", height: "50%-2",
-    label: " 상세 ",
-    border: { type: "line" },
-    scrollable: true,
-    alwaysScroll: true,
-    mouse: true,
-    tags: true,
-    style: {
-      border: { fg: "green" },
-      label: { fg: "green", bold: true },
-    },
-  });
-
-  // ── 왼쪽 하단: 컬렉션 ──
-  const colPanel = blessed.list({
-    top: "50%+1", left: 0, width: "50%", height: "50%-4",
-    label: " 컬렉션 (문서) ",
-    border: { type: "line" },
-    style: {
-      border: { fg: "yellow" },
-      selected: { fg: "black", bg: "yellow" },
-      item: { fg: "white" },
-      label: { fg: "yellow", bold: true },
-    },
-    keys: true,
-    vi: true,
-    mouse: true,
-    tags: true,
-  });
-
-  // ── 오른쪽 하단: AI 채팅 ──
-  const chatLog = blessed.log({
-    top: "50%+1", left: "50%", width: "50%", height: "50%-7",
-    label: " AI 채팅 ",
-    border: { type: "line" },
-    scrollable: true,
-    alwaysScroll: true,
-    mouse: true,
-    tags: true,
-    style: {
-      border: { fg: "magenta" },
-      label: { fg: "magenta", bold: true },
-    },
-  });
-
-  // ── 채팅 입력 ──
+  // ── 왼쪽 하단: 입력 ──
   const chatInput = blessed.textbox({
-    bottom: 3, left: "50%", width: "50%", height: 3,
-    label: " 입력 ",
+    bottom: 3, left: 0, width: "50%", height: 3,
+    label: " ❯ ",
     border: { type: "line" },
     inputOnFocus: true,
     style: {
-      border: { fg: "magenta" },
-      label: { fg: "magenta" },
+      border: { fg: "gray" },
+      label: { fg: "white", bold: true },
+    },
+  });
+
+  // ── 오른쪽: 상세/로그 ──
+  const detailPanel = blessed.log({
+    top: 3, left: "50%", width: "50%", height: "100%-6",
+    label: " 상세 ",
+    border: { type: "line" },
+    scrollable: true, alwaysScroll: true, mouse: true, tags: true,
+    style: {
+      border: { fg: "gray" },
+      label: { fg: "white", bold: true },
     },
   });
 
   // ── 상태 바 ──
   const statusBar = blessed.box({
     bottom: 0, left: 0, width: "100%", height: 3,
-    content: " {bold}Tab{/bold}:패널전환  {bold}Enter{/bold}:선택  {bold}r{/bold}:새로고침  {bold}c{/bold}:채팅  {bold}q{/bold}:종료  {bold}↑↓{/bold}:이동",
     tags: true,
-    style: { fg: "white", bg: "gray" },
+    style: { fg: "gray", bg: "black" },
   });
 
+  function renderStatusBar(msg?: string): void {
+    statusBar.setContent(msg ?? " {white-fg}{bold}1/2{/bold}{/white-fg}:탭  {white-fg}{bold}Enter{/bold}{/white-fg}:실행  {white-fg}{bold}i{/bold}{/white-fg}:입력  {white-fg}{bold}r{/bold}{/white-fg}:새로고침  {white-fg}{bold}Esc{/bold}{/white-fg}:목록  {white-fg}{bold}q{/bold}{/white-fg}:종료");
+    screen.render();
+  }
+
   screen.append(header);
-  screen.append(wfPanel);
-  screen.append(detailPanel);
-  screen.append(colPanel);
-  screen.append(chatLog);
+  screen.append(listPanel);
   screen.append(chatInput);
+  screen.append(detailPanel);
   screen.append(statusBar);
 
   // ── 데이터 ──
   let workflows: WfItem[] = [];
   let collections: ColItem[] = [];
 
-  async function loadData(): Promise<void> {
-    if (!server || !auth) {
-      wfPanel.setItems(["서버 미연결 — q 종료 후 xgen agent → /connect"]);
-      colPanel.setItems(["서버 미연결"]);
-      screen.render();
-      return;
-    }
-
-    statusBar.setContent(" 로딩 중...");
-    screen.render();
-
+  async function loadWorkflows(): Promise<void> {
+    if (!server || !auth) return;
     try {
       const { getWorkflowListDetail } = await import("../api/workflow.js");
       const wfs = await getWorkflowListDetail();
@@ -167,167 +113,189 @@ export async function startTui(): Promise<void> {
         name: w.workflow_name,
         id: (w.workflow_id ?? w.id ?? "").toString(),
         deployed: !!(w as Record<string, unknown>).is_deployed,
-        deployKey: (w as Record<string, unknown>).deploy_key as string | undefined,
-        nodeCount: (w as Record<string, unknown>).node_count as number | undefined,
       }));
-      wfPanel.setItems(workflows.map((w) => {
-        const tag = w.deployed ? "{green-fg}[배포]{/green-fg}" : "";
-        return ` ${w.name} ${tag}`;
-      }));
-    } catch (err) {
-      wfPanel.setItems([`오류: ${(err as Error).message}`]);
-    }
+    } catch { workflows = []; }
+  }
 
+  async function loadCollections(): Promise<void> {
+    if (!server || !auth) return;
     try {
       const { listCollections } = await import("../api/document.js");
       const cols = await listCollections();
       collections = cols.map((c) => ({
-        name: c.collection_make_name,
-        docs: c.total_documents,
-        chunks: c.total_chunks,
-        shared: c.is_shared,
-        group: c.share_group ?? undefined,
+        name: c.collection_make_name, id: c.id,
+        docs: c.total_documents, chunks: c.total_chunks,
+        shared: c.is_shared, group: c.share_group ?? undefined,
+        model: c.init_embedding_model ?? undefined,
       }));
-      colPanel.setItems(collections.map((c) => {
-        const shared = c.shared ? `{yellow-fg}[${c.group}]{/yellow-fg}` : "";
-        return ` ${c.name} ${shared} — ${c.docs}문서 ${c.chunks}청크`;
-      }));
-    } catch {
-      colPanel.setItems(["컬렉션 로드 실패"]);
-    }
+    } catch { collections = []; }
+  }
 
-    statusBar.setContent(" {bold}Tab{/bold}:패널전환  {bold}Enter{/bold}:선택  {bold}r{/bold}:새로고침  {bold}c{/bold}:채팅  {bold}q{/bold}:종료  {bold}↑↓{/bold}:이동");
+  function renderList(): void {
+    if (activeTab === "workflows") {
+      listPanel.label = ` 워크플로우 (${workflows.length}) `;
+      listPanel.setItems(workflows.map((w, i) => {
+        const dot = w.deployed ? "●" : "○";
+        return ` ${dot} ${String(i + 1).padStart(2)}. ${w.name}`;
+      }));
+    } else {
+      listPanel.label = ` 컬렉션 (${collections.length}) `;
+      listPanel.setItems(collections.map((c, i) =>
+        `   ${String(i + 1).padStart(2)}. ${c.name}  {gray-fg}${c.docs}문서{/gray-fg}`
+      ));
+    }
     screen.render();
   }
 
-  // ── 워크플로우 선택 시 상세 표시 ──
-  wfPanel.on("select item", (_item: unknown, index: number) => {
-    const w = workflows[index];
-    if (!w) return;
-    detailPanel.setContent([
-      `{bold}${w.name}{/bold}`,
-      "",
-      `ID: ${w.id}`,
-      `배포: ${w.deployed ? "{green-fg}Yes{/green-fg}" : "No"}`,
-      w.deployKey ? `Deploy Key: ${w.deployKey}` : "",
-      w.nodeCount ? `노드: ${w.nodeCount}개` : "",
-      "",
-      w.deployed ? "{green-fg}Enter로 실행{/green-fg}" : "{gray-fg}미배포 — 실행 불가{/gray-fg}",
-    ].filter(Boolean).join("\n"));
+  async function loadAll(): Promise<void> {
+    renderStatusBar(" 로딩...");
+    await Promise.all([loadWorkflows(), loadCollections()]);
+    renderList();
+    renderHeader();
+    renderStatusBar();
+  }
+
+  // ── 목록 커서 이동 → 상세 ──
+  listPanel.on("select item", (_item: unknown, index: number) => {
+    if (activeTab === "workflows") {
+      const w = workflows[index];
+      if (!w) return;
+      detailPanel.setContent([
+        `{bold}${w.name}{/bold}`,
+        ``,
+        `ID     ${w.id}`,
+        `배포   ${w.deployed ? "Yes" : "No"}`,
+        ``,
+        `Enter → 실행 입력`,
+      ].join("\n"));
+    } else {
+      const c = collections[index];
+      if (!c) return;
+      detailPanel.setContent([
+        `{bold}${c.name}{/bold}`,
+        ``,
+        `문서    ${c.docs}개`,
+        `청크    ${c.chunks}개`,
+        `공유    ${c.shared ? `Yes (${c.group})` : "No"}`,
+        `모델    ${c.model ?? "-"}`,
+        ``,
+        `Enter → 문서 목록`,
+      ].join("\n"));
+    }
     screen.render();
   });
 
-  // ── 워크플로우 실행 (Enter) ──
-  wfPanel.on("select", async (_item: unknown, index: number) => {
-    const w = workflows[index];
-    if (!w || !w.deployed || !w.deployKey) {
-      detailPanel.setContent("{red-fg}배포된 워크플로우만 실행 가능합니다.{/red-fg}");
+  // ── Enter ──
+  listPanel.on("select", async (_item: unknown, index: number) => {
+    if (activeTab === "workflows") {
+      const w = workflows[index];
+      if (!w) return;
+      chatInput.label = ` ${w.name} ❯ `;
+      chatInput.focus();
       screen.render();
-      return;
-    }
-    detailPanel.setContent(`{yellow-fg}${w.name} 실행 중...{/yellow-fg}`);
-    screen.render();
 
-    try {
-      const { executeWorkflow } = await import("../api/workflow.js");
-      const { randomUUID } = await import("node:crypto");
-      const result = await executeWorkflow({
-        workflow_id: w.id,
-        workflow_name: w.name,
-        input_data: "테스트 실행",
-        interaction_id: `cli_${randomUUID().slice(0, 8)}`,
-        deploy_key: w.deployKey,
-      }) as Record<string, unknown>;
+      chatInput.once("submit", async (value: string) => {
+        if (!value.trim()) {
+          chatInput.label = " ❯ ";
+          chatInput.clearValue();
+          listPanel.focus();
+          screen.render();
+          return;
+        }
 
-      if (result.content) {
-        detailPanel.setContent(`{green-fg}결과:{/green-fg}\n\n${String(result.content).slice(0, 500)}`);
-      } else if (result.error) {
-        detailPanel.setContent(`{red-fg}오류:{/red-fg} ${result.error}`);
-      } else {
-        detailPanel.setContent(JSON.stringify(result, null, 2).slice(0, 500));
+        detailPanel.log(`{gray-fg}── ${w.name} ──{/gray-fg}`);
+        detailPanel.log(`입력: ${value}`);
+        screen.render();
+
+        try {
+          const { executeWorkflow } = await import("../api/workflow.js");
+          const { randomUUID } = await import("node:crypto");
+          const result = await executeWorkflow({
+            workflow_id: w.id, workflow_name: w.name,
+            input_data: value, interaction_id: `tui_${randomUUID().slice(0, 8)}`,
+            user_id: auth?.userId ? parseInt(auth.userId) : 1,
+          }) as Record<string, unknown>;
+
+          if (result.content) {
+            detailPanel.log(`${String(result.content)}\n`);
+          } else if (result.error || result.message) {
+            detailPanel.log(`오류: ${result.error ?? result.message}\n`);
+          } else {
+            detailPanel.log(JSON.stringify(result, null, 2).slice(0, 800) + "\n");
+          }
+        } catch (err) {
+          detailPanel.log(`실패: ${(err as Error).message}\n`);
+        }
+
+        chatInput.label = " ❯ ";
+        chatInput.clearValue();
+        listPanel.focus();
+        screen.render();
+      });
+    } else {
+      const c = collections[index];
+      if (!c) return;
+      detailPanel.setContent(`${c.name} 문서 로딩...`);
+      screen.render();
+
+      try {
+        const { listDocuments } = await import("../api/document.js");
+        const docs = await listDocuments(c.id?.toString());
+        if (!docs.length) {
+          detailPanel.setContent(`{bold}${c.name}{/bold}\n\n문서 없음`);
+        } else {
+          const docList = docs.map((d, i) => {
+            const name = (d as Record<string, unknown>).name || (d as Record<string, unknown>).file_name || "이름 없음";
+            return `  ${i + 1}. ${name}`;
+          }).join("\n");
+          detailPanel.setContent(`{bold}${c.name}{/bold} — ${docs.length}개 문서\n\n${docList}`);
+        }
+      } catch (err) {
+        detailPanel.setContent(`문서 로드 실패: ${(err as Error).message}`);
       }
-    } catch (err) {
-      detailPanel.setContent(`{red-fg}실행 실패:{/red-fg} ${(err as Error).message}`);
+      screen.render();
     }
-    screen.render();
   });
 
-  // ── 컬렉션 선택 ──
-  colPanel.on("select item", (_item: unknown, index: number) => {
-    const c = collections[index];
-    if (!c) return;
-    detailPanel.setContent([
-      `{bold}${c.name}{/bold}`,
-      "",
-      `문서: ${c.docs}개`,
-      `청크: ${c.chunks}개`,
-      `공유: ${c.shared ? `Yes (${c.group})` : "No"}`,
-    ].join("\n"));
-    screen.render();
-  });
-
-  // ── 채팅 ──
+  // ── 자유 채팅 ──
   chatInput.on("submit", async (value: string) => {
-    if (!value.trim()) { chatInput.clearValue(); chatInput.focus(); screen.render(); return; }
-    chatLog.log(`{blue-fg}You:{/blue-fg} ${value}`);
+    if (!value.trim()) { chatInput.clearValue(); listPanel.focus(); screen.render(); return; }
+    detailPanel.log(`{white-fg}❯ ${value}{/white-fg}`);
     chatInput.clearValue();
     screen.render();
 
     try {
-      const provider = getDefaultProvider();
-      if (!provider) {
-        chatLog.log("{red-fg}프로바이더 미설정{/red-fg}");
-        chatInput.focus();
-        screen.render();
-        return;
-      }
-
+      const p = getDefaultProvider();
+      if (!p) { detailPanel.log("프로바이더 미설정"); chatInput.focus(); screen.render(); return; }
       const { createLLMClient, streamChat } = await import("../agent/llm.js");
-      const client = createLLMClient(provider);
-      const result = await streamChat(client, provider.model, [
-        { role: "system", content: "You are OPEN XGEN. Be concise. Respond in Korean. Max 3 sentences." },
+      const client = createLLMClient(p);
+      const result = await streamChat(client, p.model, [
+        { role: "system", content: "You are OPEN XGEN. Concise. Korean." },
         { role: "user", content: value },
       ]);
-      chatLog.log(`{green-fg}AI:{/green-fg} ${result.content || "(no response)"}`);
+      detailPanel.log(`${result.content || "(응답 없음)"}\n`);
     } catch (err) {
-      chatLog.log(`{red-fg}오류:{/red-fg} ${(err as Error).message}`);
+      detailPanel.log(`오류: ${(err as Error).message}\n`);
     }
-
     chatInput.focus();
     screen.render();
   });
 
   // ── 키바인딩 ──
-  const panels = [wfPanel, colPanel, chatInput];
-  let activePanel = 0;
-
-  function focusPanel(idx: number): void {
-    activePanel = idx;
-    panels[idx].focus();
-    screen.render();
-  }
-
+  screen.key(["1"], () => { activeTab = "workflows"; renderList(); renderHeader(); listPanel.focus(); });
+  screen.key(["2"], () => { activeTab = "collections"; renderList(); renderHeader(); listPanel.focus(); });
   screen.key(["tab"], () => {
-    activePanel = (activePanel + 1) % panels.length;
-    focusPanel(activePanel);
+    if (screen.focused === listPanel) chatInput.focus(); else listPanel.focus();
+    screen.render();
   });
-
-  screen.key(["S-tab"], () => {
-    activePanel = (activePanel - 1 + panels.length) % panels.length;
-    focusPanel(activePanel);
-  });
-
-  screen.key(["r"], async () => { await loadData(); });
-  screen.key(["c"], () => { focusPanel(2); });
+  screen.key(["i"], () => { chatInput.focus(); screen.render(); });
+  screen.key(["r"], async () => { await loadAll(); });
+  screen.key(["escape"], () => { chatInput.label = " ❯ "; listPanel.focus(); screen.render(); });
   screen.key(["q", "C-c"], () => { screen.destroy(); process.exit(0); });
 
-  // ── 자동 새로고침 (30초마다) ──
-  setInterval(async () => {
-    try { await loadData(); } catch { /* ignore */ }
-  }, 30_000);
+  setInterval(async () => { try { await loadAll(); } catch {} }, 60_000);
 
-  // 초기 로드
-  await loadData();
-  focusPanel(0);
+  await loadAll();
+  listPanel.focus();
   screen.render();
 }

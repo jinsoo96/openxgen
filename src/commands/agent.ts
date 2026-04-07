@@ -221,7 +221,7 @@ export async function agentRepl(): Promise<void> {
 
   console.log(chalk.gray(`  model  ${provider.model}`));
   if (server && auth) {
-    console.log(chalk.gray(`  xgen   ${chalk.green("●")} ${auth.username}@${(env?.name ?? server).replace("https://", "")}`));
+    console.log(chalk.gray(`  xgen   ${chalk.green("●")} ${auth.username}@${server.replace("https://", "").replace("http://", "")}`));
   } else {
     console.log(chalk.gray(`  xgen   ${chalk.red("○")} 미연결`));
   }
