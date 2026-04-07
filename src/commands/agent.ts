@@ -368,21 +368,26 @@ export async function agentRepl(): Promise<void> {
     }
 
     if (input === "/connect") {
+      rl.pause();
       await connectServer();
-      // 시스템 프롬프트 갱신
+      rl.resume();
       messages[0] = { role: "system", content: buildSystemPrompt() };
       continue;
     }
 
     if (input === "/env") {
+      rl.pause();
       await switchEnv();
+      rl.resume();
       messages[0] = { role: "system", content: buildSystemPrompt() };
       continue;
     }
 
     if (input === "/provider") {
+      rl.pause();
       const { guidedProviderSetup: setup } = await import("./provider.js");
       await setup();
+      rl.resume();
       console.log(chalk.gray("  프로바이더 변경됨. /exit 후 재시작하세요.\n"));
       continue;
     }
