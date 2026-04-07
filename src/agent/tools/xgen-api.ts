@@ -66,12 +66,15 @@ export const definitions: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "xgen_execution_history",
-      description: "워크플로우 실행 이력을 가져옵니다.",
+      description: "특정 워크플로우의 실행 이력을 가져옵니다. workflow_id와 workflow_name 필수.",
       parameters: {
         type: "object",
         properties: {
+          workflow_id: { type: "string", description: "워크플로우 ID" },
+          workflow_name: { type: "string", description: "워크플로우 이름" },
           limit: { type: "number", description: "가져올 이력 수 (기본 10)" },
         },
+        required: ["workflow_id", "workflow_name"],
       },
     },
   },
@@ -233,8 +236,11 @@ async function serverStatus(): Promise<string> {
 
 async function executionHistory(args: Record<string, unknown>): Promise<string> {
   const { getIOLogs } = await import("../../api/workflow.js");
+  const wfId = args.workflow_id as string;
+  const wfName = args.workflow_name as string;
+  if (!wfId || !wfName) return "workflow_id와 workflow_name이 필요합니다. 먼저 xgen_workflow_list로 목록을 확인하세요.";
   const limit = (args.limit as number) || 10;
-  const logs = await getIOLogs(undefined, limit);
+  const logs = await getIOLogs(wfId, wfName, limit);
   if (!logs.length) return "실행 이력 없음.";
   return logs.map((l, i) =>
     `${i + 1}. [${l.created_at ?? ""}]\n   입력: ${(l.input_data ?? "").slice(0, 80)}\n   출력: ${(l.output_data ?? "").slice(0, 80)}`

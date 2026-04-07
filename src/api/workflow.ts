@@ -103,13 +103,17 @@ export async function getExecutionStatus(executionId: string): Promise<unknown> 
 }
 
 export async function getIOLogs(
-  workflowId?: string,
+  workflowId: string,
+  workflowName: string,
   limit = 20
 ): Promise<IOLog[]> {
   const client = getClient();
-  const params: Record<string, string | number> = { limit };
-  if (workflowId) params.workflow_id = workflowId;
+  const params: Record<string, string | number> = {
+    workflow_id: workflowId,
+    workflow_name: workflowName,
+    limit,
+  };
 
   const res = await client.get("/api/workflow/io_logs", { params });
-  return res.data;
+  return res.data.in_out_logs ?? res.data ?? [];
 }

@@ -171,23 +171,9 @@ export async function homeMenu(): Promise<void> {
         key: "h", label: "실행 이력",
         hint: "워크플로우 실행 이력",
         action: async () => {
-          try {
-            const { getIOLogs } = await import("../api/workflow.js");
-            const logs = await getIOLogs(undefined, 10);
-            if (!logs.length) {
-              console.log(chalk.yellow("\n  실행 이력이 없습니다.\n"));
-              return;
-            }
-            console.log(chalk.bold(`\n  최근 실행 이력 (${logs.length}개)\n`));
-            logs.forEach((log, i) => {
-              console.log(`    ${chalk.cyan(`${i + 1}.`)} ${chalk.gray(log.created_at ?? "-")}`);
-              console.log(`       입력: ${(log.input_data ?? "").slice(0, 50)}`);
-              console.log(`       출력: ${chalk.gray((log.output_data ?? "").slice(0, 50))}`);
-            });
-            console.log();
-          } catch (err) {
-            console.log(chalk.red(`  오류: ${(err as Error).message}\n`));
-          }
+          console.log(chalk.yellow("\n  실행 이력은 워크플로우를 지정해야 합니다."));
+          console.log(chalk.gray("  사용법: xgen wf history <workflow-id> <workflow-name>"));
+          console.log(chalk.gray("  또는 AI 에이전트에서 워크플로우 목록 조회 후 이력을 요청하세요.\n"));
         },
       });
     }

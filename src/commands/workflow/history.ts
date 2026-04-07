@@ -8,14 +8,20 @@ import { printError, printHeader, truncate, formatDate } from "../../utils/forma
 
 export async function workflowHistory(
   workflowId?: string,
+  workflowName?: string,
   opts: { limit?: number } = {}
 ): Promise<void> {
   requireAuth();
 
+  if (!workflowId || !workflowName) {
+    console.log(chalk.yellow("\n워크플로우 ID와 이름이 필요합니다.\n  사용법: xgen wf history <workflow-id> <workflow-name>\n"));
+    return;
+  }
+
   const limit = opts.limit ?? 20;
 
   try {
-    const logs = await getIOLogs(workflowId, limit);
+    const logs = await getIOLogs(workflowId, workflowName, limit);
 
     if (!logs || logs.length === 0) {
       console.log(chalk.yellow("\n실행 이력이 없습니다.\n"));
