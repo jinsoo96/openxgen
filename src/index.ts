@@ -19,7 +19,7 @@ import { registerDocCommand } from "./commands/doc.js";
 import { registerOntologyCommand } from "./commands/ontology.js";
 import { getAuth, getServer, getDefaultProvider } from "./config/store.js";
 
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 
 const LOGO = chalk.cyan(`
    ██████  ██████  ███████ ███    ██
@@ -83,8 +83,8 @@ program
   .alias("dashboard")
   .description("XGEN TUI 대시보드")
   .action(async () => {
-    const { startInkDashboard } = await import("./dashboard/InkDashboard.js");
-    await startInkDashboard();
+    const { startRawTui } = await import("./dashboard/raw-tui.js");
+    await startRawTui();
   });
 
 // 인자 없이 실행: 바로 AI 채팅 (Claude Code 스타일)
