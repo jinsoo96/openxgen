@@ -417,9 +417,9 @@ export async function agentRepl(): Promise<void> {
       mcpManager?.stopAll();
       rl.close();
       if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
-      const { startTui } = await import("../dashboard/tui.js");
-      await startTui();
-      return; // TUI 종료 후 CLI도 종료
+      const { startInkDashboard } = await import("../dashboard/InkDashboard.js");
+      await startInkDashboard();
+      return;
     }
 
     // ── AI 대화 ──
