@@ -11,7 +11,8 @@ import { homedir } from "node:os";
 import { getDefaultProvider, getServer, getAuth, getEnvironments, getActiveEnvironment } from "../config/store.js";
 import { createLLMClient, streamChat, type Message, type TokenUsage } from "../agent/llm.js";
 import { getAllToolDefs, executeTool, getToolNames } from "../agent/tools/index.js";
-import { definitions as xgenToolDefs, execute as xgenExecute, isXgenTool } from "../agent/tools/xgen-api.js";
+import { execute as xgenExecute, isXgenTool } from "../agent/tools/xgen-api.js";
+import { definition as toolSearchDef, execute as toolSearchExecute, getNewlyLoadedTools, getToolIndexSummary, getLoadedToolDefs, resetLoadedTools } from "../agent/tools/tool-search.js";
 import { McpManager, loadMcpConfig } from "../mcp/client.js";
 import { guidedProviderSetup } from "./provider.js";
 import { box, ask, welcome } from "../utils/ui.js";
@@ -53,20 +54,13 @@ EXAMPLES OF GOOD RESPONSES:
 
 XGEN CONNECTED: ${server} as ${auth.username}
 
-You have full access to XGEN platform. Available tools:
+XGEN 플랫폼 도구는 tool_search로 필요할 때 로드하세요.
+tool_search("workflow") → 워크플로우 도구 로드 → 다음 턴에서 사용 가능
 
-WORKFLOW: xgen_workflow_list, xgen_workflow_run (모든 워크플로우 실행 가능, 배포 무관), xgen_workflow_info, xgen_execution_history, xgen_workflow_performance, xgen_workflow_store, xgen_workflow_generate (자연어로 워크플로우 자동 생성)
-DOCUMENTS: xgen_collection_list, xgen_document_list, xgen_document_upload
-NODES: xgen_node_list, xgen_node_search, xgen_node_categories
-PROMPTS: xgen_prompt_list
-TOOLS: xgen_tool_store, xgen_user_tools
-SCHEDULE: xgen_schedule_list
-TRACE: xgen_trace_list, xgen_interaction_list
-MCP: xgen_mcp_sessions
-ONTOLOGY: xgen_graph_rag_query, xgen_graph_stats
-SERVER: xgen_server_status
+${getToolIndexSummary()}
 
-When user says a number → find it from previous list. "실행" → execute immediately.`;
+When user says a number → find it from previous list. "실행" → execute immediately.
+워크플로우/컬렉션/노드 등 XGEN 관련 요청 → 먼저 tool_search로 해당 카테고리 도구 로드 후 실행.`;
   } else {
     prompt += `\nXGEN: Not connected. User can run /connect to connect.`;
   }
@@ -198,8 +192,10 @@ export async function agentRepl(): Promise<void> {
 
   const client = createLLMClient(provider);
 
-  // 도구 조합: 기본 + XGEN + MCP
-  const allTools: ChatCompletionTool[] = [...getAllToolDefs(), ...xgenToolDefs];
+  // 도구 조합: 핵심 도구 + ToolSearch (Progressive Disclosure)
+  // XGEN 도구 28개를 매번 전달하지 않고, tool_search로 온디맨드 로드
+  resetLoadedTools();
+  const allTools: ChatCompletionTool[] = [...getAllToolDefs(), toolSearchDef];
   const builtinNames = getToolNames();
 
   // MCP
@@ -483,7 +479,16 @@ async function runLoop(
       console.log(chalk.dim(`  ┌ ${tc.name}(${shortArgs})`));
 
       let toolResult: string;
-      if (isXgenTool(tc.name)) {
+      if (tc.name === "tool_search") {
+        toolResult = await toolSearchExecute(args);
+        // 새로 로드된 도구를 현재 세션 tools에 추가
+        const newTools = getNewlyLoadedTools(args.query as string);
+        for (const nt of newTools) {
+          if (!tools.some(t => t.function.name === nt.function.name)) {
+            tools.push(nt);
+          }
+        }
+      } else if (isXgenTool(tc.name)) {
         toolResult = await xgenExecute(tc.name, args);
       } else if (mcpManager?.isMcpTool(tc.name)) {
         toolResult = await mcpManager.callTool(tc.name, args);
